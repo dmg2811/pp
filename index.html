@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slideshow Vertical para TV</title>
+    
+    <style>
+        /* =======================================================================
+           1. ESTILOS GENERALES Y ROTACIÓN OBLIGATORIA (CSS)
+           ======================================================================= */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; 
+            background-color: #000;
+        }
+
+        body {
+            width: 100vh;
+            height: 100vw;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(90deg);
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Contenedor del slideshow */
+        #slideshow-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* =======================================================================
+           2. ESTILOS DE IMÁGENES Y CAPAS (CSS)
+           ======================================================================= */
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+            object-fit: contain;
+            object-position: center;
+            opacity: 0; 
+            transform: scale(1.0);
+            background: #000;
+        }
+        
+        .slide.active {
+            opacity: 1;
+            transform: scale(1.04); 
+        }
+
+        /* =======================================================================
+           3. ESTILOS DEL TEXTO SUPERPUESTO (CSS)
+           ======================================================================= */
+        #overlayText {
+            position: absolute;
+            bottom: 3%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+            font-size: 3vh; 
+            font-family: sans-serif;
+            z-index: 10;
+            padding: 10px;
+        }
+
+        /* ===== Controles flotantes (ocultos por defecto) ===== */
+        #controls {
+            position: absolute;
+            top: 2%;
+            right: 2%;
+            z-index: 60;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.35s ease;
+            pointer-events: none;
+        }
+        #controls.visible { opacity: 1; pointer-events: auto; }
+
+        .control-btn {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            font-size: 2vh;
+            backdrop-filter: blur(4px);
+            cursor: pointer;
+        }
+
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="slideshow-container">
+        <img id="slide1" class="slide active" alt="Slide 1">
+        <img id="slide2" class="slide" alt="Slide 2">
+        
+        <div id="overlayText"></div>
+    </div>
+
+    <div id="controls" aria-hidden="true">
+      <button id="btnFull" class="control-btn">Pantalla completa</button>
+      </div>
+
+    <script>
+        // =======================================================================
+        // 4. CONFIGURACIÓN DE IMÁGENES Y CONTROL (JAVASCRIPT)
+        // =======================================================================
+
+        const images = [
+            ["pantallas JPG/curma.jpg"],
+            ["pantallas JPG/higrax.jpg"],
+            ["pantallas JPG/mince.jpg"],
+            ["pantallas JPG/mk.jpg"],
+            ["imgparaproduccion/ultimaimagen.jpg", "Contáctanos Hoy Mismo"]
+        ];
+
+        // Elementos del DOM
+        const slide1 = document.getElementById('slide1');
+        const slide2 = document.getElementById('slide2');
+        const overlayText = document.getElementById('overlayText');
+
+        const controls = document.getElementById('controls');
+        const btnFull = document.getElementById('btnFull');
+        // Referencia a btnExit ELIMINADA de aquí
+        
+        let currentSlide = slide1; 
+        let nextSlide = slide2;    
+        let imageIndex = 0;        
+        
+        const SLIDE_DURATION = 6000;
+        const TRANSITION_DURATION = 1000;
+
+        let slideshowTimer = null;
+
+        function initializeSlideshow() {
+            if (!images || images.length === 0) {
+                console.error("No hay imágenes en el array 'images'.");
+                return;
+            }
+            
+            const [url, text] = images[imageIndex];
+            slide1.src = url;
+            overlayText.textContent = text || '';
+            
+            setTimeout(startSlideshowLoop, TRANSITION_DURATION);
+        }
+
+        function nextSlideTransition() {
+            imageIndex = (imageIndex + 1) % images.length;
+            const [nextImageUrl, nextImageText] = images[imageIndex];
+            
+            nextSlide.src = nextImageUrl;
+            
+            nextSlide.onload = () => {
+                currentSlide.classList.remove('active');
+                nextSlide.classList.add('active');
+
+                overlayText.textContent = nextImageText || '';
+
+                const temp = currentSlide;
+                currentSlide = nextSlide;
+                nextSlide = temp;
+            };
+
+            nextSlide.onerror = () => {
+                console.error(`Error al cargar la imagen: ${nextImageUrl}. Saltando...`);
+                setTimeout(nextSlideTransition, 500);
+            };
+        }
+
+        function startSlideshowLoop() {
+            if (slideshowTimer) clearInterval(slideshowTimer);
+            slideshowTimer = setInterval(nextSlideTransition, SLIDE_DURATION);
+        }
+
+        window.addEventListener('load', initializeSlideshow);
+
+        // =======================================================================
+        // CONTROLES DE VISIBILIDAD
+        // =======================================================================
+        let controlTimer = null;
+        function showControls() {
+            controls.classList.add('visible');
+            if (controlTimer) clearTimeout(controlTimer);
+            controlTimer = setTimeout(() => {
+                controls.classList.remove('visible');
+            }, 3000); 
+        }
+
+        document.addEventListener('mousemove', showControls, {passive:true});
+        document.addEventListener('touchstart', showControls, {passive:true});
+        document.addEventListener('keydown', showControls, {passive:true});
+
+        // =======================================================================
+        // ACCIONES DE LOS BOTONES 🚩 SE MANTIENE SOLO BTNFULL 🚩
+        // =======================================================================
+
+        // 1. Botón Pantalla Completa: Entra O Sale (Toggle)
+        btnFull.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                // Entrar en pantalla completa
+                document.documentElement.requestFullscreen?.();
+                btnFull.textContent = "Salir de P.C.";
+            } else {
+                // Salir de pantalla completa
+                document.exitFullscreen?.();
+                btnFull.textContent = "Pantalla completa";
+            }
+        });
+
+        // 2. Listener para actualizar el texto del botón cuando se sale con ESC
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                btnFull.textContent = "Pantalla completa";
+            } else {
+                btnFull.textContent = "Salir de P.C.";
+            }
+        });
+        
+        // =======================================================================
+        // OPCIONAL: Pausar el slideshow si tocan la pantalla y mantengan (no obligatorio)
+        // =======================================================================
+        let touchHoldTimer = null;
+        document.addEventListener('touchstart', () => {
+            // clearInterval(slideshowTimer); 
+            // touchHoldTimer = setTimeout(() => {}, 0);
+        }, {passive:true});
+        document.addEventListener('touchend', () => {
+            // startSlideshowLoop();
+        }, {passive:true});
+    </script>
+</body>
+</html>
