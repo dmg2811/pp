@@ -22,6 +22,8 @@
             position: absolute;
             top: 50%;
             left: 50%;
+            /* Se añade transición para que el giro sea suave */
+            transition: transform 0.5s ease-in-out; 
             transform: translate(-50%, -50%) rotate(90deg);
             transform-origin: center center;
             display: flex;
@@ -75,7 +77,7 @@
             padding: 10px;
         }
 
-        /* ===== Controles flotantes (ocultos por defecto) ===== */
+        /* ===== Controles flotantes ===== */
         #controls {
             position: absolute;
             top: 2%;
@@ -113,14 +115,11 @@
     </div>
 
     <div id="controls" aria-hidden="true">
-      <button id="btnFull" class="control-btn">Pantalla completa</button>
-      </div>
+        <button id="btnRotate" class="control-btn">🔄 Girar 180°</button>
+        <button id="btnFull" class="control-btn">Pantalla completa</button>
+    </div>
 
     <script>
-        // =======================================================================
-        // 4. CONFIGURACIÓN DE IMÁGENES Y CONTROL (JAVASCRIPT)
-        // =======================================================================
-
         const images = [
             ["pantallas JPG1\\Faltan\\IVR King.jpg"],
             ["pantallas JPG1\\Faltan\\Juveox.jpg"],
@@ -188,57 +187,42 @@
             ["pantallas JPG1/ULTRA POWER.jpg"],
             ["pantallas JPG1/Vios herbal.jpg"]
         ];
-        // Elementos del DOM
+
         const slide1 = document.getElementById('slide1');
         const slide2 = document.getElementById('slide2');
         const overlayText = document.getElementById('overlayText');
-
         const controls = document.getElementById('controls');
         const btnFull = document.getElementById('btnFull');
-        // Referencia a btnExit ELIMINADA de aquí
+        const btnRotate = document.getElementById('btnRotate');
         
         let currentSlide = slide1; 
         let nextSlide = slide2;    
         let imageIndex = 0;        
-        
+        let isRotated = false; // Estado del giro
+
         const SLIDE_DURATION = 6000;
         const TRANSITION_DURATION = 1000;
-
         let slideshowTimer = null;
 
         function initializeSlideshow() {
-            if (!images || images.length === 0) {
-                console.error("No hay imágenes en el array 'images'.");
-                return;
-            }
-            
+            if (!images || images.length === 0) return;
             const [url, text] = images[imageIndex];
             slide1.src = url;
             overlayText.textContent = text || '';
-            
             setTimeout(startSlideshowLoop, TRANSITION_DURATION);
         }
 
         function nextSlideTransition() {
             imageIndex = (imageIndex + 1) % images.length;
             const [nextImageUrl, nextImageText] = images[imageIndex];
-            
             nextSlide.src = nextImageUrl;
-            
             nextSlide.onload = () => {
                 currentSlide.classList.remove('active');
                 nextSlide.classList.add('active');
-
                 overlayText.textContent = nextImageText || '';
-
                 const temp = currentSlide;
                 currentSlide = nextSlide;
                 nextSlide = temp;
-            };
-
-            nextSlide.onerror = () => {
-                console.error(`Error al cargar la imagen: ${nextImageUrl}. Saltando...`);
-                setTimeout(nextSlideTransition, 500);
             };
         }
 
@@ -249,9 +233,7 @@
 
         window.addEventListener('load', initializeSlideshow);
 
-        // =======================================================================
-        // CONTROLES DE VISIBILIDAD
-        // =======================================================================
+        // Lógica de visibilidad de controles
         let controlTimer = null;
         function showControls() {
             controls.classList.add('visible');
@@ -263,45 +245,37 @@
 
         document.addEventListener('mousemove', showControls, {passive:true});
         document.addEventListener('touchstart', showControls, {passive:true});
-        document.addEventListener('keydown', showControls, {passive:true});
 
         // =======================================================================
-        // ACCIONES DE LOS BOTONES 🚩 SE MANTIENE SOLO BTNFULL 🚩
+        // ACCIÓN DE ROTAR 180°
         // =======================================================================
+        btnRotate.addEventListener('click', () => {
+            if (!isRotated) {
+                // Si estaba en 90deg, le sumamos 180deg = 270deg
+                document.body.style.transform = "translate(-50%, -50%) rotate(270deg)";
+                isRotated = true;
+            } else {
+                // Volvemos a la posición original
+                document.body.style.transform = "translate(-50%, -50%) rotate(90deg)";
+                isRotated = false;
+            }
+        });
 
-        // 1. Botón Pantalla Completa: Entra O Sale (Toggle)
+        // Botón Pantalla Completa
         btnFull.addEventListener('click', () => {
             if (!document.fullscreenElement) {
-                // Entrar en pantalla completa
                 document.documentElement.requestFullscreen?.();
                 btnFull.textContent = "Salir de P.C.";
             } else {
-                // Salir de pantalla completa
                 document.exitFullscreen?.();
                 btnFull.textContent = "Pantalla completa";
             }
         });
 
-        // 2. Listener para actualizar el texto del botón cuando se sale con ESC
         document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement) {
-                btnFull.textContent = "Pantalla completa";
-            } else {
-                btnFull.textContent = "Salir de P.C.";
-            }
+            if (!document.fullscreenElement) btnFull.textContent = "Pantalla completa";
+            else btnFull.textContent = "Salir de P.C.";
         });
-        
-        // =======================================================================
-        // OPCIONAL: Pausar el slideshow si tocan la pantalla y mantengan (no obligatorio)
-        // =======================================================================
-        let touchHoldTimer = null;
-        document.addEventListener('touchstart', () => {
-            // clearInterval(slideshowTimer); 
-            // touchHoldTimer = setTimeout(() => {}, 0);
-        }, {passive:true});
-        document.addEventListener('touchend', () => {
-            // startSlideshowLoop();
-        }, {passive:true});
     </script>
 </body>
 </html>
