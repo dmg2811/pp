@@ -1,0 +1,8 @@
+# 1. Poner todos los cambios en la zona de preparación
+git add .
+
+# 2. Guardar los cambios con una descripción clara
+git commit -m "corrección de ultra advance linea"
+
+# 3. Subir los cambios a GitHub
+git push
