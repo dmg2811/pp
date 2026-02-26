@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slideshow Vertical para TV</title>
+    
+    <style>
+        /* Mantenemos tus estilos originales que funcionan perfecto para TV */
+        html, body {
+            margin: 0; padding: 0;
+            overflow: hidden; background-color: #000;
+        }
+
+        body {
+            width: 100vh; height: 100vw;
+            position: absolute; top: 50%; left: 50%;
+            transition: transform 0.5s ease-in-out; 
+            transform: translate(-50%, -50%) rotate(90deg);
+            transform-origin: center center;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        #slideshow-container { width: 100%; height: 100%; position: relative; }
+
+        .slide {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+            object-fit: contain; object-position: center;
+            opacity: 0; transform: scale(1.0); background: #000;
+        }
+        
+        .slide.active { opacity: 1; transform: scale(1.04); }
+
+        #overlayText {
+            position: absolute; bottom: 3%; left: 50%;
+            transform: translateX(-50%);
+            color: white; text-align: center;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+            font-size: 3vh; font-family: sans-serif;
+            z-index: 10; padding: 10px;
+        }
+
+        #controls {
+            position: absolute; top: 2%; right: 2%;
+            z-index: 60; display: flex; gap: 8px;
+            opacity: 0; transition: opacity 0.35s ease;
+            pointer-events: none;
+        }
+        #controls.visible { opacity: 1; pointer-events: auto; }
+
+        .control-btn {
+            padding: 10px 14px; border-radius: 8px; border: none;
+            background: rgba(255,255,255,0.15); color: #fff;
+            font-size: 2vh; backdrop-filter: blur(4px); cursor: pointer;
+        }
+
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="slideshow-container">
+        <img id="slide1" class="slide active" alt="Slide 1">
+        <img id="slide2" class="slide" alt="Slide 2">
+        <div id="overlayText"></div>
+    </div>
+
+    <div id="controls" aria-hidden="true">
+        <button id="btnPrev" class="control-btn">⏮ Anterior</button>
+        <button id="btnPause" class="control-btn">⏸ Pausar</button>
+        <button id="btnNext" class="control-btn">Siguiente ⏭</button>
+        <button id="btnRotate" class="control-btn">🔄 Girar 180°</button>
+        <button id="btnFull" class="control-btn">Pantalla completa</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN DINÁMICA (SENIOR REFAC)
+        // ==========================================
+        
+        let images = [];
+        let imageIndex = 0;
+        let isPaused = false;
+        let isRotated = false;
+        const SLIDE_DURATION = 6000;
+        let slideshowTimer = null;
+
+        const slide1 = document.getElementById('slide1');
+        const slide2 = document.getElementById('slide2');
+        const overlayText = document.getElementById('overlayText');
+        const controls = document.getElementById('controls');
+        
+        let currentSlide = slide1; 
+        let nextSlide = slide2;
+
+        // Función para cargar datos desde el LocalStorage (Panel Admin)
+        function loadDataFromAdmin() {
+            const rawData = JSON.parse(localStorage.getItem('slideshow_db')) || [];
+            // Filtramos solo las que están marcadas como VISIBLES
+            images = rawData.filter(item => item.visible !== false);
+            
+            if (images.length === 0) {
+                overlayText.textContent = "No hay imágenes activas en el panel.";
+            }
+        }
+
+        function initializeSlideshow() {
+            loadDataFromAdmin();
+            if (images.length === 0) return;
+            
+            loadSlideData(currentSlide, imageIndex);
+            startSlideshowLoop();
+        }
+
+        function loadSlideData(slideElement, index) {
+            if (!images[index]) return;
+            slideElement.src = images[index].url;
+            overlayText.textContent = images[index].text || '';
+        }
+
+        function updateSlides() {
+            if (images.length === 0) return;
+            loadSlideData(nextSlide, imageIndex);
+            
+            nextSlide.onload = () => {
+                currentSlide.classList.remove('active');
+                nextSlide.classList.add('active');
+                
+                // Intercambio de buffers
+                const temp = currentSlide;
+                currentSlide = nextSlide;
+                nextSlide = temp;
+            };
+        }
+
+        function nextSlideTransition() {
+            if (isPaused || images.length <= 1) return;
+            imageIndex = (imageIndex + 1) % images.length;
+            updateSlides();
+        }
+
+        function startSlideshowLoop() {
+            stopSlideshowLoop();
+            slideshowTimer = setInterval(nextSlideTransition, SLIDE_DURATION);
+        }
+
+        function stopSlideshowLoop() {
+            if (slideshowTimer) clearInterval(slideshowTimer);
+        }
+
+        // --- EVENTOS DE BOTONES ---
+
+        document.getElementById('btnNext').addEventListener('click', () => {
+            if (images.length === 0) return;
+            imageIndex = (imageIndex + 1) % images.length;
+            updateSlides();
+            if (!isPaused) startSlideshowLoop();
+        });
+
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            if (images.length === 0) return;
+            imageIndex = (imageIndex - 1 + images.length) % images.length;
+            updateSlides();
+            if (!isPaused) startSlideshowLoop();
+        });
+
+        document.getElementById('btnPause').addEventListener('click', function() {
+            isPaused = !isPaused;
+            this.textContent = isPaused ? "▶ Reanudar" : "⏸ Pausar";
+            this.style.background = isPaused ? "rgba(255, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.15)";
+            if (!isPaused) startSlideshowLoop();
+            else stopSlideshowLoop();
+        });
+
+        document.getElementById('btnRotate').addEventListener('click', () => {
+            isRotated = !isRotated;
+            document.body.style.transform = `translate(-50%, -50%) rotate(${isRotated ? 270 : 90}deg)`;
+        });
+
+        document.getElementById('btnFull').addEventListener('click', () => {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+            else document.exitFullscreen?.();
+        });
+
+        // --- UTILIDADES ---
+
+        // Detectar cambios en el Panel Admin en tiempo real (si están en pestañas diferentes)
+        window.addEventListener('storage', () => {
+            loadDataFromAdmin();
+            imageIndex = 0; // Reiniciar al inicio si cambia la base de datos
+            updateSlides();
+        });
+
+        // Mostrar controles al mover mouse
+        let controlTimer = null;
+        function showControls() {
+            controls.classList.add('visible');
+            if (controlTimer) clearTimeout(controlTimer);
+            controlTimer = setTimeout(() => controls.classList.remove('visible'), 3000);
+        }
+        document.addEventListener('mousemove', showControls);
+        document.addEventListener('touchstart', showControls);
+
+        window.addEventListener('load', initializeSlideshow);
+    </script>
+</body>
+</html>
