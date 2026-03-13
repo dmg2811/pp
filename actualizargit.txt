@@ -2,7 +2,7 @@
 git add .
 
 # 2. Guardar los cambios con una descripción clara
-git commit -m "corrección de ultra advance linea"
+git commit -m "COMBOS Y 10+2 "
 
 # 3. Subir los cambios a GitHub
 git push
