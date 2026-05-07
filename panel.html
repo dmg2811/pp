@@ -26,7 +26,7 @@
             background: white;
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
         header {
@@ -44,7 +44,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         .card {
@@ -54,14 +54,16 @@
             border: 1px solid #e2e8f0;
         }
 
-        .card-bulk { border: 2px dashed var(--primary); background: var(--bulk); }
+        .card-bulk  { border: 2px dashed var(--primary); background: var(--bulk); }
+        .card-github { border: 2px solid #16a34a; background: #f0fdf4; margin-bottom: 24px; }
 
         .form-group { display: flex; flex-direction: column; gap: 10px; }
 
-        input {
+        input[type=text], input[type=password] {
             padding: 10px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
+            font-size: 0.95rem;
         }
 
         button {
@@ -69,12 +71,54 @@
             padding: 10px 15px; font-weight: 600;
             transition: 0.2s;
         }
-
-        .btn-add { background: var(--primary); color: white; }
-        .btn-bulk { background: #0369a1; color: white; }
+        .btn-add    { background: var(--primary); color: white; }
+        .btn-bulk   { background: #0369a1; color: white; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-publish { background: var(--success); color: white; font-size: 1rem; padding: 12px 20px; }
+        .btn-save-token { background: #374151; color: white; }
         button:hover { opacity: 0.9; }
 
+        /* ---- ZONA DRAG & DROP ---- */
+        #dropZone {
+            border: 3px dashed #6366f1;
+            border-radius: 12px;
+            background: #eef2ff;
+            padding: 36px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            margin-bottom: 24px;
+            position: relative;
+        }
+        #dropZone.drag-over {
+            background: #c7d2fe;
+            border-color: #4338ca;
+        }
+        #dropZone.uploading {
+            background: #fef9c3;
+            border-color: #ca8a04;
+            pointer-events: none;
+        }
+        #dropZone p { margin: 0; font-size: 1rem; color: #4338ca; font-weight: 600; }
+        #dropZone small { color: #6b7280; }
+        #dropZone input[type=file] {
+            position: absolute; inset: 0;
+            opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        #dropProgress {
+            margin-top: 12px; font-size: 0.85rem; color: #4338ca; min-height: 18px;
+        }
+        .progress-bar-wrap {
+            background: #c7d2fe; border-radius: 99px;
+            height: 8px; margin-top: 8px; overflow: hidden;
+            display: none;
+        }
+        .progress-bar-fill {
+            background: #4338ca; height: 100%;
+            border-radius: 99px; transition: width 0.3s;
+        }
+
+        /* ---- TABLA ---- */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th { text-align: left; background: #f8fafc; padding: 12px; border-bottom: 2px solid #e2e8f0; }
         td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
@@ -82,24 +126,34 @@
 
         .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
         .status-visible { background: #dcfce7; color: #166534; }
-        .status-hidden { background: #fee2e2; color: #991b1b; }
+        .status-hidden  { background: #fee2e2; color: #991b1b; }
 
         .search-box { width: 100%; margin-bottom: 20px; padding: 12px; box-sizing: border-box; }
-        
-        /* Estilo para los botones de paginación */
+
         .page-btn {
-            padding: 8px 14px;
-            border: 1px solid #cbd5e1;
-            background: white;
-            cursor: pointer;
-            border-radius: 5px;
-            transition: 0.2s;
+            padding: 8px 14px; border: 1px solid #cbd5e1;
+            background: white; cursor: pointer; border-radius: 5px; transition: 0.2s;
         }
-        .page-btn.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
+        .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* ---- ESTADO GITHUB ---- */
+        #publishStatus { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 0.9rem; color: #374151; }
+        #publishDot { width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; flex-shrink: 0; }
+        #publishDot.ok      { background: var(--success); }
+        #publishDot.error   { background: var(--danger); }
+        #publishDot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+        #publishDot.warn    { background: #f59e0b; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .github-row { display: flex; gap: 10px; align-items: flex-end; }
+        .github-row input { flex: 1; }
+        .token-hint { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+
+        .publish-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 12px; gap: 10px; flex-wrap: wrap;
         }
+        .auto-publish-label { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -110,11 +164,53 @@
         <div id="stats">Cargando...</div>
     </header>
 
+    <!-- ====== GITHUB ====== -->
+    <div class="card card-github">
+        <h3 class="section-title">🔗 Publicar en GitHub Pages</h3>
+        <p style="margin:0 0 12px; font-size:0.9rem; color:#374151;">
+            Publica el inventario como <code>data.json</code> en <strong>DylanMiramontesGomez/pantallaspublicitarias</strong>.
+            El slider en GitHub Pages lo leerá automáticamente.
+        </p>
+        <div class="github-row">
+            <div style="flex:1">
+                <input type="password" id="ghToken" placeholder="GitHub Personal Access Token (scope: repo)">
+                <div class="token-hint">GitHub → Settings → Developer settings → Personal access tokens → Classic → scope: <strong>repo</strong></div>
+            </div>
+            <button class="btn-save-token" onclick="saveToken()">Guardar Token</button>
+        </div>
+        <div class="publish-row">
+            <button class="btn-publish" onclick="publishToGitHub()">🚀 Publicar Cambios al Slider</button>
+            <label class="auto-publish-label">
+                <input type="checkbox" id="autoPublish" onchange="saveAutoPublish()">
+                Publicar automáticamente al guardar
+            </label>
+        </div>
+        <div id="publishStatus">
+            <div id="publishDot"></div>
+            <span id="publishMsg">Sin publicar aún</span>
+        </div>
+    </div>
+
+    <!-- ====== DRAG & DROP ====== -->
+    <div id="dropZone"
+         ondragover="handleDragOver(event)"
+         ondragleave="handleDragLeave(event)"
+         ondrop="handleDrop(event)">
+        <input type="file" id="dropFileInput" multiple accept="image/*" onchange="handleFileInput(event)">
+        <p>📂 Arrastra aquí carpetas o imágenes</p>
+        <small>Las imágenes se subirán a GitHub automáticamente y aparecerán en el slider</small>
+        <div id="dropProgress"></div>
+        <div class="progress-bar-wrap" id="progressBarWrap">
+            <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+        </div>
+    </div>
+
+    <!-- ====== CARGA INDIVIDUAL ====== -->
     <div class="upload-grid">
         <div class="card">
             <h3 class="section-title">Añadir Imagen Individual</h3>
             <div class="form-group">
-                <input type="text" id="imgUrl" placeholder="Ruta: pantallas/foto.jpg">
+                <input type="text" id="imgUrl" placeholder="Ruta: pantallas JPG1/foto.jpg">
                 <input type="text" id="imgText" placeholder="Texto descriptivo">
                 <button class="btn-add" onclick="addItem()">+ Agregar</button>
             </div>
@@ -123,16 +219,17 @@
         <div class="card card-bulk">
             <h3 class="section-title">🚀 Carga Masiva (Bulk)</h3>
             <div class="form-group">
-                <input type="text" id="folderPath" placeholder="Carpeta base (ej: pantallas/)">
+                <input type="text" id="folderPath" placeholder="Carpeta base (ej: pantallas JPG1/)">
                 <input type="file" id="bulkFiles" multiple accept="image/*">
                 <button class="btn-bulk" onclick="bulkAdd()">+ Añadir todos los archivos</button>
             </div>
         </div>
     </div>
 
+    <!-- ====== INVENTARIO ====== -->
     <input type="text" id="searchInput" class="search-box" placeholder="Filtrar por nombre o ruta..." onkeyup="resetPageAndRender()">
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <h2>Inventario</h2>
         <div>
             <button onclick="exportData()" style="background:#e2e8f0">Backup JSON</button>
@@ -143,11 +240,7 @@
     <table>
         <thead>
             <tr>
-                <th>Vista</th>
-                <th>Ruta</th>
-                <th>Texto</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+                <th>Vista</th><th>Ruta</th><th>Texto</th><th>Estado</th><th>Acciones</th>
             </tr>
         </thead>
         <tbody id="inventoryBody"></tbody>
@@ -156,15 +249,311 @@
 </div>
 
 <script>
-    // Configuración de Paginación
+    // ==========================================
+    // CONFIG GITHUB — repo correcto
+    // ==========================================
+    const GH_REPO   = 'DylanMiramontesGomez/pantallaspublicitarias';
+    const GH_FILE   = 'data.json';
+    const GH_BRANCH = 'main';
+
+    // ==========================================
+    // DATOS Y PAGINACIÓN
+    // ==========================================
     let currentPage = 1;
     const recordsPerPage = 10;
-    
-    // Carga de Datos
     let inventory = JSON.parse(localStorage.getItem('slideshow_db')) || [];
 
-    // --- FUNCIONES DE RENDERIZADO ---
+    // ==========================================
+    // INIT
+    // ==========================================
+    window.addEventListener('load', () => {
+        const saved = localStorage.getItem('gh_token');
+        if (saved) document.getElementById('ghToken').value = saved;
 
+        const auto = localStorage.getItem('auto_publish') === 'true';
+        document.getElementById('autoPublish').checked = auto;
+
+        const lastPublish = localStorage.getItem('last_publish');
+        if (lastPublish) setStatus('ok', 'Último publish: ' + lastPublish);
+
+        renderInventory();
+    });
+
+    function saveToken() {
+        const t = document.getElementById('ghToken').value.trim();
+        if (!t) { alert('Ingresa un token primero'); return; }
+        localStorage.setItem('gh_token', t);
+        alert('Token guardado en tu navegador ✅');
+    }
+
+    function saveAutoPublish() {
+        localStorage.setItem('auto_publish', document.getElementById('autoPublish').checked);
+    }
+
+    // ==========================================
+    // DRAG & DROP — lee carpetas Y sube imágenes a GitHub
+    // ==========================================
+    const GH_PAGES_BASE = 'https://dylanmiramontezgomez.github.io/pantallaspublicitarias/';
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        document.getElementById('dropZone').classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+        document.getElementById('dropZone').classList.remove('drag-over');
+    }
+
+    async function handleDrop(e) {
+        e.preventDefault();
+        const zone = document.getElementById('dropZone');
+        zone.classList.remove('drag-over');
+
+        const items = Array.from(e.dataTransfer.items);
+        const allFiles = [];
+
+        for (const item of items) {
+            const entry = item.webkitGetAsEntry?.();
+            if (entry) await traverseEntry(entry, '', allFiles);
+        }
+
+        if (allFiles.length === 0) {
+            setDropProgress('⚠️ No se encontraron imágenes en lo que soltaste.');
+            return;
+        }
+
+        await uploadFilesToGitHub(allFiles);
+    }
+
+    // Recorre carpetas de forma recursiva con FileSystem API
+    function traverseEntry(entry, path, fileList) {
+        return new Promise((resolve) => {
+            if (entry.isFile) {
+                entry.file(file => {
+                    if (file.type.startsWith('image/')) {
+                        // path relativo conservando la carpeta (ej: "pantallas JPG1/foto.jpg")
+                        fileList.push({ file, repoPath: path + file.name });
+                    }
+                    resolve();
+                });
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const readAll = (accumulated) => {
+                    reader.readEntries(async (entries) => {
+                        if (entries.length === 0) {
+                            await Promise.all(
+                                accumulated.map(e => traverseEntry(e, path + entry.name + '/', fileList))
+                            );
+                            resolve();
+                        } else {
+                            readAll([...accumulated, ...entries]);
+                        }
+                    });
+                };
+                readAll([]);
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    // Click en la zona = selector de archivos
+    function handleFileInput(e) {
+        const files = Array.from(e.target.files)
+            .filter(f => f.type.startsWith('image/'))
+            .map(f => ({ file: f, repoPath: 'imagenes/' + f.name }));
+        e.target.value = '';
+        if (files.length) uploadFilesToGitHub(files);
+    }
+
+    // ---- Subir archivos a GitHub y agregar al inventario ----
+    async function uploadFilesToGitHub(fileEntries) {
+        const token = localStorage.getItem('gh_token');
+        if (!token) {
+            alert('⚠️ Necesitas guardar tu GitHub Token primero (sección verde arriba).\nSin token no se pueden subir imágenes a GitHub.');
+            return;
+        }
+
+        const zone = document.getElementById('dropZone');
+        const bar  = document.getElementById('progressBarWrap');
+        const fill = document.getElementById('progressBarFill');
+        zone.classList.add('uploading');
+        bar.style.display = 'block';
+
+        const headers = {
+            'Authorization': 'token ' + token,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github+json'
+        };
+
+        let done = 0;
+        let errors = 0;
+        const addedItems = [];
+
+        for (const entry of fileEntries) {
+            setDropProgress(`⬆️ Subiendo ${done + 1}/${fileEntries.length}: ${entry.file.name}`);
+            fill.style.width = Math.round((done / fileEntries.length) * 100) + '%';
+
+            try {
+                // Leer archivo como base64
+                const b64 = await fileToBase64(entry.file);
+
+                // Verificar si ya existe (para obtener el SHA)
+                let sha = null;
+                const checkRes = await fetch(
+                    `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIRepoPath(entry.repoPath)}?ref=${GH_BRANCH}`,
+                    { headers }
+                );
+                if (checkRes.ok) {
+                    const existing = await checkRes.json();
+                    sha = existing.sha;
+                }
+
+                // Subir a GitHub
+                const body = {
+                    message: `Imagen: ${entry.file.name}`,
+                    content: b64,
+                    branch: GH_BRANCH
+                };
+                if (sha) body.sha = sha;
+
+                const putRes = await fetch(
+                    `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIRepoPath(entry.repoPath)}`,
+                    { method: 'PUT', headers, body: JSON.stringify(body) }
+                );
+
+                if (putRes.ok) {
+                    // URL de GitHub Pages (sin encode especial, usa la ruta real)
+                    const pageUrl = GH_PAGES_BASE + entry.repoPath;
+                    addedItems.push({
+                        id: Date.now() + done,
+                        url: pageUrl,
+                        text: entry.file.name.replace(/\.[^.]+$/, ''),
+                        visible: true,
+                        date: new Date().toLocaleDateString()
+                    });
+                } else {
+                    errors++;
+                }
+            } catch (err) {
+                errors++;
+            }
+
+            done++;
+        }
+
+        // Agregar al inventario y publicar data.json
+        inventory.push(...addedItems);
+        localStorage.setItem('slideshow_db', JSON.stringify(inventory));
+        renderInventory();
+
+        fill.style.width = '100%';
+        setTimeout(() => {
+            zone.classList.remove('uploading');
+            bar.style.display = 'none';
+            fill.style.width = '0%';
+        }, 800);
+
+        const msg = errors > 0
+            ? `✅ ${addedItems.length} subidas, ❌ ${errors} errores`
+            : `✅ ${addedItems.length} imágen(es) subidas a GitHub y listas en el slider`;
+        setDropProgress(msg);
+        setTimeout(() => setDropProgress(''), 6000);
+
+        // Publicar data.json automáticamente
+        await publishToGitHub();
+    }
+
+    // ---- Helpers ----
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // Quitar el prefijo "data:image/xxx;base64,"
+                resolve(reader.result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Codifica cada segmento del path por separado (no codifica "/")
+    function encodeURIRepoPath(path) {
+        return path.split('/').map(encodeURIComponent).join('/');
+    }
+
+    function setDropProgress(msg) {
+        document.getElementById('dropProgress').textContent = msg;
+    }
+
+    // ==========================================
+    // PUBLICAR A GITHUB
+    // ==========================================
+    async function publishToGitHub() {
+        const token = localStorage.getItem('gh_token');
+        if (!token) {
+            alert('Configura tu GitHub Token primero (sección verde arriba).');
+            return;
+        }
+
+        setStatus('loading', 'Publicando...');
+
+        const visibleItems = inventory.filter(item => item.visible !== false);
+        const jsonStr = JSON.stringify(visibleItems, null, 2);
+        const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+
+        const headers = {
+            'Authorization': 'token ' + token,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github+json'
+        };
+
+        try {
+            // Obtener SHA actual del archivo
+            let sha = null;
+            const getRes = await fetch(
+                `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`,
+                { headers }
+            );
+            if (getRes.ok) {
+                const current = await getRes.json();
+                sha = current.sha;
+            }
+
+            // Crear o actualizar
+            const body = {
+                message: `Panel: actualizar data.json [${new Date().toLocaleString()}]`,
+                content: b64,
+                branch: GH_BRANCH
+            };
+            if (sha) body.sha = sha;
+
+            const putRes = await fetch(
+                `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`,
+                { method: 'PUT', headers, body: JSON.stringify(body) }
+            );
+
+            if (putRes.ok) {
+                const ts = new Date().toLocaleString();
+                localStorage.setItem('last_publish', ts);
+                setStatus('ok', `✅ Publicado: ${ts} — ${visibleItems.length} imágenes activas`);
+            } else {
+                const err = await putRes.json();
+                setStatus('error', '❌ Error: ' + (err.message || putRes.status));
+            }
+        } catch (e) {
+            setStatus('error', '❌ Error de red: ' + e.message);
+        }
+    }
+
+    function setStatus(type, msg) {
+        document.getElementById('publishDot').className = type;
+        document.getElementById('publishMsg').textContent = msg;
+    }
+
+    // ==========================================
+    // RENDERIZADO
+    // ==========================================
     function resetPageAndRender() {
         currentPage = 1;
         renderInventory();
@@ -175,87 +564,58 @@
         const search = document.getElementById('searchInput').value.toLowerCase();
         tbody.innerHTML = '';
 
-        // 1. Filtrar
-        let filtered = inventory.filter(item => 
-            item.url.toLowerCase().includes(search) || 
-            item.text.toLowerCase().includes(search)
-        );
-        
-        // Invertir para ver lo más reciente
+        let filtered = inventory
+            .filter(item => item.url.toLowerCase().includes(search) || item.text.toLowerCase().includes(search));
         filtered = [...filtered].reverse();
 
-        // 2. Lógica de Paginación
-        const totalRecords = filtered.length;
-        const totalPages = Math.ceil(totalRecords / recordsPerPage);
-        
+        const totalPages = Math.ceil(filtered.length / recordsPerPage);
         if (currentPage > totalPages) currentPage = totalPages || 1;
 
-        const startIndex = (currentPage - 1) * recordsPerPage;
-        const endIndex = startIndex + recordsPerPage;
-        const paginatedItems = filtered.slice(startIndex, endIndex);
-
-        // 3. Dibujar Tabla
-        paginatedItems.forEach(item => {
+        const start = (currentPage - 1) * recordsPerPage;
+        filtered.slice(start, start + recordsPerPage).forEach(item => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><img src="${item.url}" class="img-preview" onerror="this.src='https://via.placeholder.com/60x40?text=Error'"></td>
+                <td><img src="${item.url}" class="img-preview" onerror="this.src='https://via.placeholder.com/60x40?text=❌'"></td>
                 <td><small>${item.url}</small></td>
                 <td>${item.text || '---'}</td>
                 <td><span class="status-badge ${item.visible ? 'status-visible' : 'status-hidden'}">${item.visible ? 'Visible' : 'Oculto'}</span></td>
                 <td style="display:flex; gap:5px;">
-                    <button style="background:#64748b; color:white; font-size:11px;" onclick="toggleVisibility(${item.id})">${item.visible ? 'Ocultar' : 'Mostrar'}</button>
-                    <button class="btn-danger" style="padding: 5px 10px;" onclick="deleteItem(${item.id})">🗑️</button>
-                </td>
-            `;
+                    <button style="background:#64748b;color:white;font-size:11px;" onclick="toggleVisibility(${item.id})">${item.visible ? 'Ocultar' : 'Mostrar'}</button>
+                    <button class="btn-danger" style="padding:5px 10px;" onclick="deleteItem(${item.id})">🗑️</button>
+                </td>`;
             tbody.appendChild(row);
         });
 
-        // 4. Actualizar Interfaz
-        document.getElementById('stats').innerText = `Total: ${totalRecords} | Página ${currentPage} de ${totalPages || 1}`;
-        renderPaginationControls(totalPages);
+        document.getElementById('stats').innerText = `Total: ${filtered.length} | Página ${currentPage} de ${totalPages || 1}`;
+        renderPagination(totalPages);
     }
 
-    function renderPaginationControls(totalPages) {
+    function renderPagination(total) {
         const container = document.getElementById('paginationControls');
         container.innerHTML = '';
-
-        if (totalPages <= 1) return;
-
-        for (let i = 1; i <= totalPages; i++) {
+        if (total <= 1) return;
+        for (let i = 1; i <= total; i++) {
             const btn = document.createElement('button');
             btn.innerText = i;
             btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-            btn.onclick = () => {
-                currentPage = i;
-                renderInventory();
-                window.scrollTo({top: 0, behavior: 'smooth'});
-            };
+            btn.onclick = () => { currentPage = i; renderInventory(); window.scrollTo({top:0,behavior:'smooth'}); };
             container.appendChild(btn);
         }
     }
 
-    // --- ACCIONES ---
-
+    // ==========================================
+    // CRUD
+    // ==========================================
     function bulkAdd() {
         const fileInput = document.getElementById('bulkFiles');
         const folderPath = document.getElementById('folderPath').value.trim();
         const files = fileInput.files;
-
-        if (files.length === 0) return alert("Selecciona imágenes primero");
-
+        if (!files.length) return alert('Selecciona imágenes primero');
         let prefix = folderPath;
         if (prefix && !prefix.endsWith('/')) prefix += '/';
-
         for (let i = 0; i < files.length; i++) {
-            inventory.push({
-                id: Date.now() + i,
-                url: prefix + files[i].name,
-                text: files[i].name.split('.')[0],
-                visible: true,
-                date: new Date().toLocaleDateString()
-            });
+            inventory.push({ id: Date.now()+i, url: prefix+files[i].name, text: files[i].name.split('.')[0], visible: true, date: new Date().toLocaleDateString() });
         }
-
         fileInput.value = '';
         saveAndRefresh();
         alert(`Se cargaron ${files.length} imágenes.`);
@@ -264,16 +624,8 @@
     function addItem() {
         const url = document.getElementById('imgUrl').value.trim();
         const text = document.getElementById('imgText').value.trim();
-        if (!url) return alert("Ruta obligatoria");
-
-        inventory.push({
-            id: Date.now(),
-            url: url,
-            text: text,
-            visible: true,
-            date: new Date().toLocaleDateString()
-        });
-
+        if (!url) return alert('Ruta obligatoria');
+        inventory.push({ id: Date.now(), url, text, visible: true, date: new Date().toLocaleDateString() });
         document.getElementById('imgUrl').value = '';
         document.getElementById('imgText').value = '';
         saveAndRefresh();
@@ -285,33 +637,33 @@
     }
 
     function deleteItem(id) {
-        if (confirm("¿Eliminar imagen?")) {
+        if (confirm('¿Eliminar imagen?')) {
             inventory = inventory.filter(item => item.id !== id);
             saveAndRefresh();
         }
     }
 
     function clearAll() {
-        if(confirm("⚠️ ¿Borrar TODO el inventario?")) {
-            inventory = [];
-            saveAndRefresh();
-        }
+        if (confirm('⚠️ ¿Borrar TODO el inventario?')) { inventory = []; saveAndRefresh(); }
     }
 
     function saveAndRefresh() {
         localStorage.setItem('slideshow_db', JSON.stringify(inventory));
         renderInventory();
+        if (localStorage.getItem('auto_publish') === 'true') {
+            publishToGitHub();
+        } else {
+            document.getElementById('publishDot').className = 'warn';
+            document.getElementById('publishMsg').textContent = '⚠️ Hay cambios sin publicar. Presiona "Publicar Cambios al Slider".';
+        }
     }
 
     function exportData() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(inventory));
         const a = document.createElement('a');
-        a.href = dataStr; a.download = "backup_slider.json";
+        a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(inventory));
+        a.download = 'backup_slider.json';
         a.click();
     }
-
-    // Inicio
-    renderInventory();
 </script>
 </body>
 </html>
