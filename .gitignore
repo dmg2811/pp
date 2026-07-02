@@ -1,0 +1,15 @@
+# Archivos comprimidos: no se sirven en el slider y solo inflan el repo.
+# Sube las imagenes ya extraidas a una carpeta (ej. imagenes/) en su lugar.
+*.zip
+
+# Carpetas de trabajo / borradores de fotos aun no clasificadas.
+# Cuando una imagen esta lista para el slider, muevela a imagenes/ (o a
+# pantallas JPG / pantallas JPG1) y sube esa carpeta, no esta.
+-Marzo- JPG Ingredientes/
+JPG Catalogo oferta de locura pantallas/
+Pantallas junio/
+Pantallas ptomocion -ABRIL- JPG/
+jpg ingredientes y productos/
+
+# Configuracion local del entorno de preview
+.claude/

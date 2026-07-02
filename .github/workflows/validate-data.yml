@@ -1,0 +1,48 @@
+name: Validar data.json
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - data.json
+  workflow_dispatch: {}
+
+jobs:
+  check-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que cada imagen visible en data.json exista en el repo
+        run: |
+          python3 - <<'EOF'
+          import json, sys, urllib.parse, os
+
+          with open("data.json", encoding="utf-8") as f:
+              items = json.load(f)
+
+          failed = []
+          for item in items:
+              if item.get("visible") is False:
+                  continue
+              url = item.get("url", "")
+              # Solo podemos validar rutas dentro de este repo (relativas o
+              # https://dmg2811.github.io/pp/...); URLs externas se omiten.
+              if url.startswith("https://dmg2811.github.io/pp/"):
+                  rel = url[len("https://dmg2811.github.io/pp/"):]
+              elif url.startswith("http://") or url.startswith("https://"):
+                  continue
+              else:
+                  rel = url
+              rel = urllib.parse.unquote(rel)
+              if not os.path.isfile(rel):
+                  failed.append((item.get("text", "?"), url))
+
+          if failed:
+              print(f"::error::{len(failed)} imagen(es) en data.json no existen en el repo:")
+              for text, url in failed:
+                  print(f"  - {text}: {url}")
+              sys.exit(1)
+
+          print(f"OK: {len(items)} entradas revisadas, todas las imagenes visibles existen.")
+          EOF

@@ -168,15 +168,21 @@
     <div class="card card-github">
         <h3 class="section-title">🔗 Publicar en GitHub Pages</h3>
         <p style="margin:0 0 12px; font-size:0.9rem; color:#374151;">
-            Publica el inventario como <code>data.json</code> en <strong>DylanMiramontesGomez/pantallaspublicitarias</strong>.
+            Publica el inventario como <code>data.json</code> en <strong>dmg2811/pp</strong>.
             El slider en GitHub Pages lo leerá automáticamente.
+        </p>
+        <p style="margin:0 0 12px; font-size:0.8rem; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:8px 10px;">
+            ⚠️ El token queda guardado sin cifrar en este navegador. Usa un <strong>fine-grained token</strong> limitado
+            solo al repo <code>pp</code> y con fecha de expiración (no uses uno "classic" con acceso a todos tus repos).
+            Si esta computadora es compartida (tienda), presiona "Olvidar Token" al terminar.
         </p>
         <div class="github-row">
             <div style="flex:1">
                 <input type="password" id="ghToken" placeholder="GitHub Personal Access Token (scope: repo)">
-                <div class="token-hint">GitHub → Settings → Developer settings → Personal access tokens → Classic → scope: <strong>repo</strong></div>
+                <div class="token-hint">GitHub → Settings → Developer settings → Personal access tokens → Fine-grained → repo: <strong>pp</strong> → permiso Contents: Read and write</div>
             </div>
             <button class="btn-save-token" onclick="saveToken()">Guardar Token</button>
+            <button class="btn-danger" onclick="forgetToken()">Olvidar Token</button>
         </div>
         <div class="publish-row">
             <button class="btn-publish" onclick="publishToGitHub()">🚀 Publicar Cambios al Slider</button>
@@ -316,6 +322,12 @@
         localStorage.setItem('auto_publish', document.getElementById('autoPublish').checked);
     }
 
+    function forgetToken() {
+        localStorage.removeItem('gh_token');
+        document.getElementById('ghToken').value = '';
+        alert('Token borrado de este navegador.');
+    }
+
     // ==========================================
     // DRAG & DROP — lee carpetas Y sube imágenes a GitHub
     // ==========================================
@@ -416,13 +428,22 @@
         let done = 0;
         let errors = 0;
         const skipped = [];
+        const compressed = [];
         const addedItems = [];
 
         for (const entry of fileEntries) {
             setDropProgress(`⬆️ Subiendo ${done + 1}/${fileEntries.length}: ${entry.file.name}`);
             fill.style.width = Math.round((done / fileEntries.length) * 100) + '%';
 
-            if (entry.file.size > MAX_UPLOAD_BYTES) {
+            let uploadFile = entry.file;
+            try {
+                uploadFile = await compressImageIfNeeded(entry.file);
+                if (uploadFile !== entry.file) compressed.push(entry.file.name);
+            } catch (e) {
+                uploadFile = entry.file; // si falla la compresión, se intenta con el original
+            }
+
+            if (uploadFile.size > MAX_UPLOAD_BYTES) {
                 skipped.push(entry.file.name);
                 done++;
                 continue;
@@ -430,7 +451,7 @@
 
             try {
                 // Leer archivo como base64
-                const b64 = await fileToBase64(entry.file);
+                const b64 = await fileToBase64(uploadFile);
 
                 // Verificar si ya existe (para obtener el SHA)
                 let sha = null;
@@ -489,13 +510,41 @@
         }, 800);
 
         let msg = `✅ ${addedItems.length} subidas`;
+        if (compressed.length > 0) msg += `, 🗜️ ${compressed.length} comprimidas automáticamente`;
         if (errors > 0) msg += `, ❌ ${errors} errores`;
-        if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por pesar más de 20MB (${skipped.join(', ')}) — súbelas por git`;
+        if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por seguir pesando más de 20MB tras comprimir (${skipped.join(', ')}) — súbelas por git`;
         setDropProgress(msg);
         setTimeout(() => setDropProgress(''), 8000);
 
         // Publicar data.json automáticamente
         await publishToGitHub();
+    }
+
+    // ---- Comprime imágenes pesadas antes de subir (evita fallos por tamaño en la API) ----
+    const COMPRESS_THRESHOLD_BYTES = 3 * 1024 * 1024; // 3MB
+    const COMPRESS_MAX_DIMENSION = 2400; // px, de sobra para pantallas 4K
+
+    async function compressImageIfNeeded(file) {
+        if (!file.type.startsWith('image/') || file.size <= COMPRESS_THRESHOLD_BYTES) return file;
+
+        const bitmap = await createImageBitmap(file);
+        let { width, height } = bitmap;
+        if (width > COMPRESS_MAX_DIMENSION || height > COMPRESS_MAX_DIMENSION) {
+            const scale = COMPRESS_MAX_DIMENSION / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+        bitmap.close?.();
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+        // Si la compresión no ayudó (o falló), nos quedamos con el archivo original.
+        if (!blob || blob.size >= file.size) return file;
+        return new File([blob], file.name, { type: 'image/jpeg' });
     }
 
     // ---- Helpers ----

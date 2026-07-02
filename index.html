@@ -154,13 +154,15 @@
             const ok = await loadDataFromGitHub();
             if (!ok) loadDataFromLocalStorage();
 
-            if (images.length === 0) {
+            if (images.length > 0) {
+                loadSlideData(currentSlide, imageIndex);
+                startSlideshowLoop();
+            } else {
                 overlayText.textContent = 'No hay imágenes activas.';
-                return;
             }
 
-            loadSlideData(currentSlide, imageIndex);
-            startSlideshowLoop();
+            // Seguimos reintentando aunque no haya imágenes al inicio: una pantalla
+            // de tienda puede arrancar antes de que el internet/router esté listo.
             scheduleRefresh();
         }
 
@@ -198,19 +200,29 @@
             if (slideshowTimer) clearInterval(slideshowTimer);
         }
 
-        // Refresco periódico desde GitHub Pages
+        // Refresco periódico desde GitHub Pages.
+        // Si no hay imágenes todavía, reintenta más seguido (RETRY_INTERVAL) en vez de
+        // esperar los 5 minutos completos — útil cuando la pantalla arranca sin internet.
+        const RETRY_INTERVAL = 15 * 1000;
+
         function scheduleRefresh() {
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(async () => {
+            if (refreshTimer) clearTimeout(refreshTimer);
+            const wait = images.length === 0 ? RETRY_INTERVAL : REFRESH_INTERVAL;
+            refreshTimer = setTimeout(async () => {
                 const prevCount = images.length;
                 const ok = await loadDataFromGitHub();
-                if (!ok) return;
-                // Si cambió el catálogo, reiniciar desde el inicio
-                if (images.length !== prevCount) {
+                if (ok && images.length !== prevCount) {
                     imageIndex = 0;
-                    updateSlides();
+                    if (prevCount === 0 && images.length > 0) {
+                        overlayText.textContent = '';
+                        loadSlideData(currentSlide, imageIndex);
+                        startSlideshowLoop();
+                    } else {
+                        updateSlides();
+                    }
                 }
-            }, REFRESH_INTERVAL);
+                scheduleRefresh();
+            }, wait);
         }
 
         // ==========================================
