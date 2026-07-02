@@ -266,7 +266,7 @@
     // ==========================================
     // INIT
     // ==========================================
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
         const saved = localStorage.getItem('gh_token');
         if (saved) document.getElementById('ghToken').value = saved;
 
@@ -276,8 +276,34 @@
         const lastPublish = localStorage.getItem('last_publish');
         if (lastPublish) setStatus('ok', 'Último publish: ' + lastPublish);
 
+        await syncWithRemote();
         renderInventory();
     });
+
+    // Trae el data.json publicado y agrega al inventario local cualquier
+    // imagen que ya esté publicada pero no exista en este navegador
+    // (evita que un localStorage vacío/viejo borre el catálogo real al publicar).
+    async function syncWithRemote() {
+        try {
+            const res = await fetch(GH_PAGES_BASE + 'data.json?t=' + Date.now());
+            if (!res.ok) return;
+            const remote = await res.json();
+            const localIds = new Set(inventory.map(item => item.id));
+            let added = 0;
+            remote.forEach(item => {
+                if (!localIds.has(item.id)) {
+                    inventory.push(item);
+                    added++;
+                }
+            });
+            if (added > 0) {
+                localStorage.setItem('slideshow_db', JSON.stringify(inventory));
+                setStatus('warn', `⚠️ Se importaron ${added} imagen(es) publicadas que faltaban en este navegador.`);
+            }
+        } catch (e) {
+            // Sin conexión: seguimos con lo que haya en localStorage.
+        }
+    }
 
     function saveToken() {
         const t = document.getElementById('ghToken').value.trim();
@@ -386,13 +412,21 @@
             'Accept': 'application/vnd.github+json'
         };
 
+        const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // límite práctico de la GitHub Contents API
         let done = 0;
         let errors = 0;
+        const skipped = [];
         const addedItems = [];
 
         for (const entry of fileEntries) {
             setDropProgress(`⬆️ Subiendo ${done + 1}/${fileEntries.length}: ${entry.file.name}`);
             fill.style.width = Math.round((done / fileEntries.length) * 100) + '%';
+
+            if (entry.file.size > MAX_UPLOAD_BYTES) {
+                skipped.push(entry.file.name);
+                done++;
+                continue;
+            }
 
             try {
                 // Leer archivo como base64
@@ -454,11 +488,11 @@
             fill.style.width = '0%';
         }, 800);
 
-        const msg = errors > 0
-            ? `✅ ${addedItems.length} subidas, ❌ ${errors} errores`
-            : `✅ ${addedItems.length} imágen(es) subidas a GitHub y listas en el slider`;
+        let msg = `✅ ${addedItems.length} subidas`;
+        if (errors > 0) msg += `, ❌ ${errors} errores`;
+        if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por pesar más de 20MB (${skipped.join(', ')}) — súbelas por git`;
         setDropProgress(msg);
-        setTimeout(() => setDropProgress(''), 6000);
+        setTimeout(() => setDropProgress(''), 8000);
 
         // Publicar data.json automáticamente
         await publishToGitHub();
@@ -559,6 +593,12 @@
         renderInventory();
     }
 
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
     function renderInventory() {
         const tbody = document.getElementById('inventoryBody');
         const search = document.getElementById('searchInput').value.toLowerCase();
@@ -574,10 +614,11 @@
         const start = (currentPage - 1) * recordsPerPage;
         filtered.slice(start, start + recordsPerPage).forEach(item => {
             const row = document.createElement('tr');
+            const safeUrl = escapeHtml(item.url);
             row.innerHTML = `
-                <td><img src="${item.url}" class="img-preview" onerror="this.src='https://via.placeholder.com/60x40?text=❌'"></td>
-                <td><small>${item.url}</small></td>
-                <td>${item.text || '---'}</td>
+                <td><img src="${safeUrl}" class="img-preview" onerror="this.src='https://via.placeholder.com/60x40?text=❌'"></td>
+                <td><small>${safeUrl}</small></td>
+                <td>${escapeHtml(item.text) || '---'}</td>
                 <td><span class="status-badge ${item.visible ? 'status-visible' : 'status-hidden'}">${item.visible ? 'Visible' : 'Oculto'}</span></td>
                 <td style="display:flex; gap:5px;">
                     <button style="background:#64748b;color:white;font-size:11px;" onclick="toggleVisibility(${item.id})">${item.visible ? 'Ocultar' : 'Mostrar'}</button>
