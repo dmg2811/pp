@@ -7,12 +7,22 @@
 
 ## Agregar contenido nuevo
 1. Abre `https://dmg2811.github.io/pp/panel.html` con tu GitHub token guardado.
-2. Arrastra las imágenes al recuadro punteado (se suben y publican solas). Si una imagen pesa
-   más de 3MB se comprime automáticamente antes de subir.
+2. Arrastra las imágenes o videos al recuadro punteado (se suben y publican solos). Si una
+   imagen pesa más de 3MB se comprime automáticamente antes de subir.
 3. **No uses** "Añadir Imagen Individual" ni "Carga Masiva" a menos que el archivo YA esté
    subido al repo — esos botones solo agregan una referencia, no suben el archivo. Usarlos mal
    fue justo lo que rompió el slider la última vez (imágenes "fantasma").
 4. Revisa en la tabla que la miniatura cargue (no un ❌) antes de dar por hecho que ya quedó.
+
+## Videos
+- Formato: **MP4 con codec H.264** (el único soportado de forma confiable en navegadores de
+  Smart TV — evita H.265/HEVC, VP9 o AV1).
+- Sin audio o silenciados: el video se reproduce `muted` siempre — casi todo navegador bloquea
+  el autoplay con sonido, y además así conviene para señalización de tienda.
+- Pésalos ya comprimidos antes de subir (idealmente <20MB, 1080p o menos) — el panel **no**
+  comprime video automáticamente como sí hace con imágenes.
+- El slider detecta que es video por la extensión del archivo (`.mp4`, `.webm`, `.mov`, `.m4v`)
+  y lo reproduce completo antes de pasar al siguiente slide.
 
 ## La pantalla de una tienda no actualiza / muestra roto
 1. Revisa `https://dmg2811.github.io/pp/data.json` en el navegador — ¿las URLs cargan?

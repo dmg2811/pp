@@ -26,11 +26,17 @@
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
             transition: opacity 1s ease-in-out, transform 1s ease-in-out;
-            object-fit: contain; object-position: center;
             opacity: 0; transform: scale(1.0); background: #000;
         }
 
         .slide.active { opacity: 1; transform: scale(1.04); }
+
+        /* La imagen o el video quedan dentro del .slide, no son el .slide */
+        .slide img, .slide video {
+            width: 100%; height: 100%;
+            object-fit: contain; object-position: center;
+            display: block;
+        }
 
         #overlayText {
             position: absolute; bottom: 3%; left: 50%;
@@ -68,8 +74,8 @@
 <body>
 
     <div id="slideshow-container">
-        <img id="slide1" class="slide active" alt="Slide 1">
-        <img id="slide2" class="slide" alt="Slide 2">
+        <div id="slide1" class="slide active"></div>
+        <div id="slide2" class="slide"></div>
         <div id="overlayText"></div>
     </div>
 
@@ -94,6 +100,8 @@
         // Cada cuánto refrescar los datos desde GitHub (ms)
         const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
+        // Duración de una imagen en pantalla. Un video usa su propia duración real
+        // (evento 'ended'), esto solo aplica a imágenes.
         const SLIDE_DURATION = 6000;
 
         // ==========================================
@@ -103,8 +111,9 @@
         let imageIndex = 0;
         let isPaused = false;
         let isRotated = false;
-        let slideshowTimer = null;
+        let advanceTimer = null;   // reemplaza el setInterval fijo: el tiempo varía si es video
         let refreshTimer = null;
+        let endedHandler = null;   // referencia al listener 'ended' del video activo, para poder quitarlo
 
         const slide1 = document.getElementById('slide1');
         const slide2 = document.getElementById('slide2');
@@ -147,6 +156,13 @@
         }
 
         // ==========================================
+        // IMAGEN vs VIDEO
+        // ==========================================
+        function isVideoUrl(url) {
+            return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url || '');
+        }
+
+        // ==========================================
         // SLIDESHOW
         // ==========================================
 
@@ -156,7 +172,7 @@
 
             if (images.length > 0) {
                 loadSlideData(currentSlide, imageIndex);
-                startSlideshowLoop();
+                scheduleNextTransition();
             } else {
                 overlayText.textContent = 'No hay imágenes activas.';
             }
@@ -166,23 +182,58 @@
             scheduleRefresh();
         }
 
+        // Llena un slot (#slide1 / #slide2) con un <img> o <video> según corresponda.
+        // Devuelve el elemento de medio creado (para engancharle el evento "listo").
         function loadSlideData(slideElement, index) {
-            if (!images[index]) return;
-            slideElement.src = images[index].url;
-            overlayText.textContent = images[index].text || '';
+            const item = images[index];
+            if (!item) return null;
+            slideElement.innerHTML = '';
+            overlayText.textContent = item.text || '';
+
+            let media;
+            if (isVideoUrl(item.url)) {
+                media = document.createElement('video');
+                media.src = item.url;
+                media.muted = true;              // autoplay con sonido está bloqueado en todo navegador de TV
+                media.autoplay = true;
+                media.playsInline = true;
+                media.setAttribute('playsinline', '');
+                media.setAttribute('webkit-playsinline', '');
+                media.preload = 'auto';
+                if (images.length <= 1) media.loop = true; // única pieza: que no se quede congelada al terminar
+            } else {
+                media = document.createElement('img');
+                media.src = item.url;
+                media.alt = item.text || '';
+            }
+            slideElement.appendChild(media);
+            return media;
         }
 
         function updateSlides() {
             if (images.length === 0) return;
-            loadSlideData(nextSlide, imageIndex);
+            const media = loadSlideData(nextSlide, imageIndex);
+            if (!media) return;
 
-            nextSlide.onload = () => {
+            const onReady = () => {
                 currentSlide.classList.remove('active');
+                const outgoingVideo = currentSlide.querySelector('video');
+                if (outgoingVideo) outgoingVideo.pause();
+
                 nextSlide.classList.add('active');
                 const temp = currentSlide;
                 currentSlide = nextSlide;
                 nextSlide = temp;
+
+                scheduleNextTransition();
             };
+
+            if (media.tagName === 'VIDEO') {
+                media.addEventListener('loadeddata', onReady, { once: true });
+                media.play().catch(() => {}); // algunos navegadores de TV requieren play() explícito
+            } else {
+                media.onload = onReady;
+            }
         }
 
         function nextSlideTransition() {
@@ -191,13 +242,33 @@
             updateSlides();
         }
 
-        function startSlideshowLoop() {
-            stopSlideshowLoop();
-            slideshowTimer = setInterval(nextSlideTransition, SLIDE_DURATION);
+        // Programa cuándo pasar al siguiente slide: tiempo fijo para imágenes,
+        // evento 'ended' (con respaldo por timeout) para videos.
+        function scheduleNextTransition() {
+            clearAdvanceTimer();
+            if (isPaused || images.length <= 1) return;
+
+            const video = currentSlide.querySelector('video');
+            if (video) {
+                endedHandler = () => nextSlideTransition();
+                video.addEventListener('ended', endedHandler, { once: true });
+                const durationMs = isFinite(video.duration) && video.duration > 0
+                    ? video.duration * 1000
+                    : SLIDE_DURATION;
+                advanceTimer = setTimeout(nextSlideTransition, durationMs + 4000); // respaldo si 'ended' no dispara
+            } else {
+                advanceTimer = setTimeout(nextSlideTransition, SLIDE_DURATION);
+            }
         }
 
-        function stopSlideshowLoop() {
-            if (slideshowTimer) clearInterval(slideshowTimer);
+        function clearAdvanceTimer() {
+            if (advanceTimer) clearTimeout(advanceTimer);
+            advanceTimer = null;
+            if (endedHandler) {
+                const video = currentSlide.querySelector('video');
+                if (video) video.removeEventListener('ended', endedHandler);
+                endedHandler = null;
+            }
         }
 
         // Refresco periódico desde GitHub Pages.
@@ -216,7 +287,7 @@
                     if (prevCount === 0 && images.length > 0) {
                         overlayText.textContent = '';
                         loadSlideData(currentSlide, imageIndex);
-                        startSlideshowLoop();
+                        scheduleNextTransition();
                     } else {
                         updateSlides();
                     }
@@ -233,22 +304,26 @@
             if (images.length === 0) return;
             imageIndex = (imageIndex + 1) % images.length;
             updateSlides();
-            if (!isPaused) startSlideshowLoop();
         });
 
         document.getElementById('btnPrev').addEventListener('click', () => {
             if (images.length === 0) return;
             imageIndex = (imageIndex - 1 + images.length) % images.length;
             updateSlides();
-            if (!isPaused) startSlideshowLoop();
         });
 
         document.getElementById('btnPause').addEventListener('click', function() {
             isPaused = !isPaused;
             this.textContent = isPaused ? '▶ Reanudar' : '⏸ Pausar';
             this.style.background = isPaused ? 'rgba(255,0,0,0.4)' : 'rgba(255,255,255,0.15)';
-            if (!isPaused) startSlideshowLoop();
-            else stopSlideshowLoop();
+            const video = currentSlide.querySelector('video');
+            if (isPaused) {
+                clearAdvanceTimer();
+                if (video) video.pause();
+            } else {
+                if (video) video.play().catch(() => {});
+                scheduleNextTransition();
+            }
         });
 
         document.getElementById('btnRotate').addEventListener('click', () => {

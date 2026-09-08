@@ -202,9 +202,9 @@
          ondragover="handleDragOver(event)"
          ondragleave="handleDragLeave(event)"
          ondrop="handleDrop(event)">
-        <input type="file" id="dropFileInput" multiple accept="image/*" onchange="handleFileInput(event)">
-        <p>📂 Arrastra aquí carpetas o imágenes</p>
-        <small>Las imágenes se subirán a GitHub automáticamente y aparecerán en el slider</small>
+        <input type="file" id="dropFileInput" multiple accept="image/*,video/mp4,video/webm" onchange="handleFileInput(event)">
+        <p>📂 Arrastra aquí carpetas, imágenes o videos</p>
+        <small>Se suben a GitHub automáticamente y aparecen en el slider. Videos: expórtalos ya en MP4 (H.264), idealmente &lt;20MB — no se comprimen automáticamente como las imágenes.</small>
         <div id="dropProgress"></div>
         <div class="progress-bar-wrap" id="progressBarWrap">
             <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
@@ -356,11 +356,15 @@
         }
 
         if (allFiles.length === 0) {
-            setDropProgress('⚠️ No se encontraron imágenes en lo que soltaste.');
+            setDropProgress('⚠️ No se encontraron imágenes o videos en lo que soltaste.');
             return;
         }
 
         await uploadFilesToGitHub(allFiles);
+    }
+
+    function isMediaFile(file) {
+        return file.type.startsWith('image/') || file.type.startsWith('video/');
     }
 
     // Recorre carpetas de forma recursiva con FileSystem API
@@ -368,7 +372,7 @@
         return new Promise((resolve) => {
             if (entry.isFile) {
                 entry.file(file => {
-                    if (file.type.startsWith('image/')) {
+                    if (isMediaFile(file)) {
                         // path relativo conservando la carpeta (ej: "pantallas JPG1/foto.jpg")
                         fileList.push({ file, repoPath: path + file.name });
                     }
@@ -398,7 +402,7 @@
     // Click en la zona = selector de archivos
     function handleFileInput(e) {
         const files = Array.from(e.target.files)
-            .filter(f => f.type.startsWith('image/'))
+            .filter(isMediaFile)
             .map(f => ({ file: f, repoPath: 'imagenes/' + f.name }));
         e.target.value = '';
         if (files.length) uploadFilesToGitHub(files);
@@ -512,7 +516,7 @@
         let msg = `✅ ${addedItems.length} subidas`;
         if (compressed.length > 0) msg += `, 🗜️ ${compressed.length} comprimidas automáticamente`;
         if (errors > 0) msg += `, ❌ ${errors} errores`;
-        if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por seguir pesando más de 20MB tras comprimir (${skipped.join(', ')}) — súbelas por git`;
+        if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por pesar más de 20MB (${skipped.join(', ')}) — comprime el video o súbelo por git`;
         setDropProgress(msg);
         setTimeout(() => setDropProgress(''), 8000);
 
