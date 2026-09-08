@@ -19,8 +19,15 @@
   Smart TV — evita H.265/HEVC, VP9 o AV1).
 - Sin audio o silenciados: el video se reproduce `muted` siempre — casi todo navegador bloquea
   el autoplay con sonido, y además así conviene para señalización de tienda.
-- Pésalos ya comprimidos antes de subir (idealmente <20MB, 1080p o menos) — el panel **no**
-  comprime video automáticamente como sí hace con imágenes.
+- Pésalos ya comprimidos antes de subir (idealmente <20MB, 1080p o menos). El panel avisa si
+  detecta que un video no es MP4/H.264 liviano, pero **no lo convierte solo** — se intentó
+  hacerlo automático en el navegador con ffmpeg.wasm y no es viable: requiere headers
+  especiales (COOP/COEP) que GitHub Pages no permite configurar. Dos formas de convertir:
+  1. **Pídeselo a Claude** — dale la ruta del archivo, lo convierte con ffmpeg real en un paso
+     y te dice cómo subirlo.
+  2. **HandBrake** (gratis, handbrake.fr) — abre el video, preset "Fast 1080p30", exportar. Si
+     el video es vertical (para pantalla en portrait), usa el mismo preset, HandBrake respeta
+     la orientación original.
 - El slider detecta que es video por la extensión del archivo (`.mp4`, `.webm`, `.mov`, `.m4v`)
   y lo reproduce completo antes de pasar al siguiente slide.
 
