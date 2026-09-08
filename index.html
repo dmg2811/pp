@@ -210,12 +210,19 @@
             return media;
         }
 
+        // Si un archivo falla al cargar (borrado, 404, ruta mal escrita), no se
+        // congela el slideshow para siempre en lo último que se alcanzó a ver:
+        // se salta al siguiente automáticamente. skipGuard evita un loop
+        // infinito si TODO el catálogo estuviera roto.
+        let skipGuard = 0;
+
         function updateSlides() {
             if (images.length === 0) return;
             const media = loadSlideData(nextSlide, imageIndex);
             if (!media) return;
 
             const onReady = () => {
+                skipGuard = 0;
                 currentSlide.classList.remove('active');
                 const outgoingVideo = currentSlide.querySelector('video');
                 if (outgoingVideo) outgoingVideo.pause();
@@ -228,11 +235,26 @@
                 scheduleNextTransition();
             };
 
+            const onError = () => {
+                console.warn('No se pudo cargar, se omite:', images[imageIndex]?.url);
+                skipGuard++;
+                if (skipGuard >= images.length) {
+                    // Todo el catálogo falló: no seguir intentando en bucle cerrado.
+                    skipGuard = 0;
+                    overlayText.textContent = 'No se pudo cargar ninguna imagen/video.';
+                    return;
+                }
+                imageIndex = (imageIndex + 1) % images.length;
+                updateSlides(); // reintenta directo con el siguiente, sin mostrar el roto
+            };
+
             if (media.tagName === 'VIDEO') {
                 media.addEventListener('loadeddata', onReady, { once: true });
+                media.addEventListener('error', onError, { once: true });
                 media.play().catch(() => {}); // algunos navegadores de TV requieren play() explícito
             } else {
                 media.onload = onReady;
+                media.onerror = onError;
             }
         }
 

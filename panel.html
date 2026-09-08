@@ -154,6 +154,20 @@
             margin-top: 12px; gap: 10px; flex-wrap: wrap;
         }
         .auto-publish-label { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer; }
+
+        /* Aviso flotante: cambios sin publicar. Fijo para que no se pierda de
+           vista al bajar en la página (así se pasó por alto la última vez). */
+        #floatingPublishBar {
+            display: none;
+            position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+            background: #92400e; color: white; padding: 10px 14px; border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 100;
+            align-items: center; gap: 10px; font-size: 0.9rem;
+        }
+        #floatingPublishBar.visible { display: flex; }
+        #floatingPublishBar button {
+            background: white; color: #92400e; padding: 6px 12px; font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -204,7 +218,7 @@
          ondrop="handleDrop(event)">
         <input type="file" id="dropFileInput" multiple accept="image/*,video/*" onchange="handleFileInput(event)">
         <p>📂 Arrastra aquí carpetas, imágenes o videos</p>
-        <small>Se suben a GitHub automáticamente y aparecen en el slider. Cualquier formato de video se convierte solo a MP4/H.264 antes de subir (puede tardar según el tamaño).</small>
+        <small>Se suben a GitHub automáticamente y aparecen en el slider. Imágenes pesadas se comprimen solas; videos deben venir ya en MP4/H.264 (el panel avisa si no).</small>
         <div id="dropProgress"></div>
         <div class="progress-bar-wrap" id="progressBarWrap">
             <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
@@ -215,6 +229,10 @@
     <div class="upload-grid">
         <div class="card">
             <h3 class="section-title">Añadir Imagen Individual</h3>
+            <p style="margin:4px 0 10px; font-size:0.78rem; color:#b45309;">
+                ⚠️ Esto solo agrega la referencia, <strong>no sube ningún archivo</strong>.
+                Úsalo solo si ese archivo ya existe en el repo — si no, usa el recuadro de arriba.
+            </p>
             <div class="form-group">
                 <input type="text" id="imgUrl" placeholder="Ruta: pantallas JPG1/foto.jpg">
                 <input type="text" id="imgText" placeholder="Texto descriptivo">
@@ -224,6 +242,10 @@
 
         <div class="card card-bulk">
             <h3 class="section-title">🚀 Carga Masiva (Bulk)</h3>
+            <p style="margin:4px 0 10px; font-size:0.78rem; color:#b45309;">
+                ⚠️ Igual que arriba: solo agrega referencias, no sube los archivos.
+                Para subir de verdad, usa el recuadro de arriba.
+            </p>
             <div class="form-group">
                 <input type="text" id="folderPath" placeholder="Carpeta base (ej: pantallas JPG1/)">
                 <input type="file" id="bulkFiles" multiple accept="image/*">
@@ -254,6 +276,11 @@
     <div id="paginationControls" style="display:flex; gap:5px; margin-top:20px; justify-content:center; flex-wrap:wrap;"></div>
 </div>
 
+<div id="floatingPublishBar">
+    <span>⚠️ Hay cambios sin publicar</span>
+    <button onclick="publishToGitHub()">Publicar ahora</button>
+</div>
+
 <script>
     // ==========================================
     // CONFIG GITHUB — repo correcto
@@ -268,6 +295,13 @@
     let currentPage = 1;
     const recordsPerPage = 10;
     let inventory = JSON.parse(localStorage.getItem('slideshow_db')) || [];
+
+    // ID único: Date.now() solo (o +i en un for rápido) puede repetirse si dos
+    // cosas se agregan en el mismo milisegundo. Un contador propio lo evita.
+    let idCounter = 0;
+    function genId() {
+        return Date.now() * 1000 + (idCounter++ % 1000);
+    }
 
     // ==========================================
     // INIT
@@ -352,7 +386,9 @@
 
         for (const item of items) {
             const entry = item.webkitGetAsEntry?.();
-            if (entry) await traverseEntry(entry, '', allFiles);
+            // path vacío = archivo suelto sin carpeta: que caiga en imagenes/,
+            // igual que el selector de archivos, en vez de ensuciar la raíz del repo.
+            if (entry) await traverseEntry(entry, entry.isFile ? 'imagenes/' : '', allFiles);
         }
 
         if (allFiles.length === 0) {
@@ -510,7 +546,7 @@
                     // URL de GitHub Pages (sin encode especial, usa la ruta real)
                     const pageUrl = GH_PAGES_BASE + repoPath;
                     addedItems.push({
-                        id: Date.now() + done,
+                        id: genId(),
                         url: pageUrl,
                         text: entry.file.name.replace(/\.[^.]+$/, ''),
                         visible: true,
@@ -621,8 +657,10 @@
             'Accept': 'application/vnd.github+json'
         };
 
-        try {
-            // Obtener SHA actual del archivo
+        // Intenta publicar; si el sha quedó obsoleto (409 — alguien más publicó
+        // justo antes, ej. dos pestañas abiertas), reintenta una vez con el sha
+        // fresco en vez de fallar directo.
+        async function attemptPublish() {
             let sha = null;
             const getRes = await fetch(
                 `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`,
@@ -633,7 +671,6 @@
                 sha = current.sha;
             }
 
-            // Crear o actualizar
             const body = {
                 message: `Panel: actualizar data.json [${new Date().toLocaleString()}]`,
                 content: b64,
@@ -641,10 +678,18 @@
             };
             if (sha) body.sha = sha;
 
-            const putRes = await fetch(
+            return fetch(
                 `https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}`,
                 { method: 'PUT', headers, body: JSON.stringify(body) }
             );
+        }
+
+        try {
+            let putRes = await attemptPublish();
+            if (putRes.status === 409) {
+                setStatus('loading', 'Publicando (reintentando, alguien más publicó al mismo tiempo)...');
+                putRes = await attemptPublish();
+            }
 
             if (putRes.ok) {
                 const ts = new Date().toLocaleString();
@@ -662,6 +707,7 @@
     function setStatus(type, msg) {
         document.getElementById('publishDot').className = type;
         document.getElementById('publishMsg').textContent = msg;
+        document.getElementById('floatingPublishBar').classList.toggle('visible', type === 'warn');
     }
 
     // ==========================================
@@ -740,7 +786,7 @@
         let prefix = folderPath;
         if (prefix && !prefix.endsWith('/')) prefix += '/';
         for (let i = 0; i < files.length; i++) {
-            inventory.push({ id: Date.now()+i, url: prefix+files[i].name, text: files[i].name.split('.')[0], visible: true, date: new Date().toLocaleDateString() });
+            inventory.push({ id: genId(), url: prefix+files[i].name, text: files[i].name.split('.')[0], visible: true, date: new Date().toLocaleDateString() });
         }
         fileInput.value = '';
         saveAndRefresh();
@@ -751,7 +797,7 @@
         const url = document.getElementById('imgUrl').value.trim();
         const text = document.getElementById('imgText').value.trim();
         if (!url) return alert('Ruta obligatoria');
-        inventory.push({ id: Date.now(), url, text, visible: true, date: new Date().toLocaleDateString() });
+        inventory.push({ id: genId(), url, text, visible: true, date: new Date().toLocaleDateString() });
         document.getElementById('imgUrl').value = '';
         document.getElementById('imgText').value = '';
         saveAndRefresh();
@@ -759,13 +805,18 @@
 
     // Pone el item primero en el orden de reproducción de la pantalla.
     // (data.json se publica en el mismo orden en que queda `inventory`, y el
-    // slider siempre arranca desde el índice 0.)
-    function moveToFront(id) {
+    // slider siempre arranca desde el índice 0.) Se publica de inmediato,
+    // sin esperar al botón "Publicar" ni al auto-publish: el sentido de este
+    // botón es "que se vea YA", y dejarlo a medias fue justo lo que causó
+    // confusión la última vez (se movía localmente pero no se publicaba).
+    async function moveToFront(id) {
         const idx = inventory.findIndex(item => item.id === id);
         if (idx <= 0) return;
         const [item] = inventory.splice(idx, 1);
         inventory.unshift(item);
-        saveAndRefresh();
+        localStorage.setItem('slideshow_db', JSON.stringify(inventory));
+        renderInventory();
+        await publishToGitHub();
     }
 
     function toggleVisibility(id) {
@@ -773,10 +824,40 @@
         saveAndRefresh();
     }
 
+    // Borra el archivo real del repo (best-effort: si falla o no está en
+    // GitHub Pages, igual se quita del inventario — no bloquea al usuario).
+    async function deleteFromGitHub(url) {
+        const token = localStorage.getItem('gh_token');
+        if (!token || !url.startsWith(GH_PAGES_BASE)) return;
+        const repoPath = url.slice(GH_PAGES_BASE.length);
+        const headers = {
+            'Authorization': 'token ' + token,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github+json'
+        };
+        try {
+            const getRes = await fetch(
+                `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIRepoPath(repoPath)}?ref=${GH_BRANCH}`,
+                { headers }
+            );
+            if (!getRes.ok) return; // ya no existe o no se pudo leer, no hay nada que borrar
+            const { sha } = await getRes.json();
+            await fetch(
+                `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIRepoPath(repoPath)}`,
+                { method: 'DELETE', headers, body: JSON.stringify({ message: `Borrar: ${repoPath}`, sha, branch: GH_BRANCH }) }
+            );
+        } catch (e) {
+            console.warn('No se pudo borrar el archivo en GitHub (se quitó igual del inventario):', e);
+        }
+    }
+
     function deleteItem(id) {
-        if (confirm('¿Eliminar imagen?')) {
-            inventory = inventory.filter(item => item.id !== id);
+        const item = inventory.find(i => i.id === id);
+        if (!item) return;
+        if (confirm('¿Eliminar imagen? También se borrará el archivo del repositorio.')) {
+            inventory = inventory.filter(i => i.id !== id);
             saveAndRefresh();
+            deleteFromGitHub(item.url);
         }
     }
 
@@ -790,8 +871,7 @@
         if (localStorage.getItem('auto_publish') === 'true') {
             publishToGitHub();
         } else {
-            document.getElementById('publishDot').className = 'warn';
-            document.getElementById('publishMsg').textContent = '⚠️ Hay cambios sin publicar. Presiona "Publicar Cambios al Slider".';
+            setStatus('warn', '⚠️ Hay cambios sin publicar. Presiona "Publicar Cambios al Slider".');
         }
     }
 
