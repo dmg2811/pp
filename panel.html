@@ -320,25 +320,34 @@
         renderInventory();
     });
 
-    // Trae el data.json publicado y agrega al inventario local cualquier
-    // imagen que ya esté publicada pero no exista en este navegador
-    // (evita que un localStorage vacío/viejo borre el catálogo real al publicar).
+    // Trae el data.json publicado y lo usa como fuente de verdad para todo lo
+    // que ya esté publicado: agrega lo que falte en este navegador Y corrige
+    // cualquier entrada local que haya quedado vieja/incorrecta (p. ej. un
+    // localStorage de otro navegador/sesión con datos de antes de un fix).
+    // Los items que solo existen en local (aún no publicados) no se tocan.
     async function syncWithRemote() {
         try {
             const res = await fetch(GH_PAGES_BASE + 'data.json?t=' + Date.now());
             if (!res.ok) return;
             const remote = await res.json();
-            const localIds = new Set(inventory.map(item => item.id));
-            let added = 0;
+            const localById = new Map(inventory.map(item => [item.id, item]));
+            let added = 0, updated = 0;
             remote.forEach(item => {
-                if (!localIds.has(item.id)) {
+                const local = localById.get(item.id);
+                if (!local) {
                     inventory.push(item);
                     added++;
+                } else if (JSON.stringify(local) !== JSON.stringify(item)) {
+                    Object.assign(local, item);
+                    updated++;
                 }
             });
-            if (added > 0) {
+            if (added > 0 || updated > 0) {
                 localStorage.setItem('slideshow_db', JSON.stringify(inventory));
-                setStatus('warn', `⚠️ Se importaron ${added} imagen(es) publicadas que faltaban en este navegador.`);
+                const parts = [];
+                if (added > 0) parts.push(`${added} nueva(s)`);
+                if (updated > 0) parts.push(`${updated} corregida(s)`);
+                setStatus('warn', `⚠️ Sincronizado con lo publicado: ${parts.join(', ')}.`);
             }
         } catch (e) {
             // Sin conexión: seguimos con lo que haya en localStorage.
