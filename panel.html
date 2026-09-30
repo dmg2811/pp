@@ -1005,6 +1005,10 @@
         const folderPath = document.getElementById('folderPath').value.trim();
         const files = fileInput.files;
         if (!files.length) return alert('Selecciona imágenes primero');
+        if (looksLikeLocalPath(folderPath)) {
+            alert('⚠️ Esa "Carpeta base" parece una ruta de TU computadora, no del repositorio — nunca va a cargar en la pantalla.\nEscribe solo el nombre de la carpeta dentro del repo (ej: pantallas JPG1/), o usa el recuadro de arriba para subir de verdad.');
+            return;
+        }
         let prefix = folderPath;
         if (prefix && !prefix.endsWith('/')) prefix += '/';
         for (let i = 0; i < files.length; i++) {
@@ -1015,10 +1019,23 @@
         alert(`Se cargaron ${files.length} imágenes.`);
     }
 
+    // Detecta que alguien arrastró/pegó una ruta de SU PROPIA computadora en vez
+    // de una ruta del repo — pasa cuando se arrastra un archivo sobre este campo
+    // de texto en vez de soltarlo en el recuadro de arriba. Ese archivo nunca se
+    // sube a ningún lado, y la URL (file:///C:/...) no carga ni en pantalla ni en
+    // ningún otro navegador — solo en esa computadora, si acaso.
+    function looksLikeLocalPath(str) {
+        return /^file:\/\//i.test(str) || /^[a-zA-Z]:[\\/]/.test(str);
+    }
+
     function addItem() {
         const url = document.getElementById('imgUrl').value.trim();
         const text = document.getElementById('imgText').value.trim();
         if (!url) return alert('Ruta obligatoria');
+        if (looksLikeLocalPath(url)) {
+            alert('⚠️ Esa es una ruta de TU computadora, no del repositorio — nunca va a cargar en la pantalla.\nSi quieres subir ese archivo, arrástralo al recuadro de arriba ("Arrastra aquí carpetas, imágenes o videos"), no lo pegues aquí.');
+            return;
+        }
         inventory.push({ id: genId(), url, text, visible: true, date: new Date().toLocaleDateString() });
         document.getElementById('imgUrl').value = '';
         document.getElementById('imgText').value = '';
