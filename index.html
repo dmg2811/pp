@@ -110,7 +110,11 @@
         let images = [];
         let imageIndex = 0;
         let isPaused = false;
-        let isRotated = false;
+        // Se guarda en localStorage: sin esto, cualquier recarga de la página
+        // (reinicio de la TV, corte de luz, el navegador refrescando solo)
+        // perdía el ajuste manual de "Girar 180°" y la pantalla volvía a
+        // mostrarse de cabeza como al principio.
+        let isRotated = localStorage.getItem('slider_rotated') === 'true';
         let advanceTimer = null;   // reemplaza el setInterval fijo: el tiempo varía si es video
         let refreshTimer = null;
         let endedHandler = null;   // referencia al listener 'ended' del video activo, para poder quitarlo
@@ -165,6 +169,10 @@
         // ==========================================
         // SLIDESHOW
         // ==========================================
+
+        // Aplicar de inmediato la orientación guardada, antes de cargar nada,
+        // para no mostrar ni un instante la orientación por defecto incorrecta.
+        applyRotation();
 
         async function initializeSlideshow() {
             const ok = await loadDataFromGitHub();
@@ -348,9 +356,14 @@
             }
         });
 
+        function applyRotation() {
+            document.body.style.transform = `translate(-50%, -50%) rotate(${isRotated ? 270 : 90}deg)`;
+        }
+
         document.getElementById('btnRotate').addEventListener('click', () => {
             isRotated = !isRotated;
-            document.body.style.transform = `translate(-50%, -50%) rotate(${isRotated ? 270 : 90}deg)`;
+            localStorage.setItem('slider_rotated', isRotated);
+            applyRotation();
         });
 
         document.getElementById('btnFull').addEventListener('click', () => {
