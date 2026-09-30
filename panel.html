@@ -711,6 +711,15 @@
 
         setStatus('loading', 'Publicando...');
 
+        // Antes de publicar, siempre nos ponemos al día con lo que ya está en
+        // GitHub: si esta pestaña llevaba rato abierta y alguien (u otro
+        // navegador) ya corrigió/publicó algo mientras tanto, no lo pisamos
+        // con datos viejos. Lo nuevo/sin publicar de este navegador se
+        // conserva igual (syncWithRemote solo reemplaza lo que ya coincide
+        // por id, y agrega al final lo que sea nuevo aquí).
+        await syncWithRemote();
+        renderInventory();
+
         const visibleItems = inventory.filter(item => item.visible !== false);
         const jsonStr = JSON.stringify(visibleItems, null, 2);
         const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
