@@ -211,6 +211,34 @@
         </div>
     </div>
 
+    <!-- ====== CONFIGURACIÓN ====== -->
+    <div class="card" style="margin-bottom:24px;">
+        <h3 class="section-title">⚙️ Configuración de las pantallas</h3>
+        <p style="margin:0 0 12px; font-size:0.85rem; color:#64748b;">
+            Se publica como <code>config.json</code>. Las pantallas ya encendidas lo toman solas en su próximo
+            refresco (no hace falta reiniciarlas); una pantalla nueva lo usa desde que arranca.
+        </p>
+        <div class="upload-grid" style="grid-template-columns: 1fr 1fr 1fr; align-items:end;">
+            <div class="form-group">
+                <label style="font-size:0.85rem; font-weight:600;">Duración de cada imagen (segundos)</label>
+                <input type="number" id="cfgSlideDuration" min="2" max="120" value="6">
+            </div>
+            <div class="form-group">
+                <label style="font-size:0.85rem; font-weight:600;">Refresco de catálogo (minutos)</label>
+                <input type="number" id="cfgRefreshInterval" min="1" max="60" value="5">
+            </div>
+            <div class="form-group">
+                <label style="font-size:0.85rem; font-weight:600;">Rotación por defecto (pantalla nueva)</label>
+                <select id="cfgRotation" style="padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+                    <option value="90">90°</option>
+                    <option value="270">270° (al revés)</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn-save-token" style="margin-top:12px;" onclick="publishConfig()">Guardar y publicar configuración</button>
+        <div id="cfgStatus" style="margin-top:8px; font-size:0.85rem; color:#374151;"></div>
+    </div>
+
     <!-- ====== DRAG & DROP ====== -->
     <div id="dropZone"
          ondragover="handleDragOver(event)"
@@ -322,6 +350,7 @@
 
         await syncWithRemote();
         renderInventory();
+        loadConfigIntoForm();
     });
 
     // Trae el data.json publicado y lo usa como fuente de verdad para todo lo
@@ -722,6 +751,61 @@
         document.getElementById('publishDot').className = type;
         document.getElementById('publishMsg').textContent = msg;
         document.getElementById('floatingPublishBar').classList.toggle('visible', type === 'warn');
+    }
+
+    // ==========================================
+    // CONFIGURACIÓN (config.json)
+    // ==========================================
+    const GH_CONFIG_FILE = 'config.json';
+    const DEFAULT_CONFIG = { slideDurationSeconds: 6, refreshIntervalMinutes: 5, defaultRotationDeg: 90 };
+
+    async function loadConfigIntoForm() {
+        try {
+            const res = await fetch(GH_PAGES_BASE + GH_CONFIG_FILE + '?t=' + Date.now());
+            const cfg = res.ok ? { ...DEFAULT_CONFIG, ...(await res.json()) } : DEFAULT_CONFIG;
+            document.getElementById('cfgSlideDuration').value = cfg.slideDurationSeconds;
+            document.getElementById('cfgRefreshInterval').value = cfg.refreshIntervalMinutes;
+            document.getElementById('cfgRotation').value = cfg.defaultRotationDeg;
+        } catch (e) {
+            // Sin conexión: se quedan los defaults que ya trae el HTML.
+        }
+    }
+
+    async function publishConfig() {
+        const token = localStorage.getItem('gh_token');
+        if (!token) { alert('Configura tu GitHub Token primero (sección verde arriba).'); return; }
+
+        const cfg = {
+            slideDurationSeconds: Number(document.getElementById('cfgSlideDuration').value) || DEFAULT_CONFIG.slideDurationSeconds,
+            refreshIntervalMinutes: Number(document.getElementById('cfgRefreshInterval').value) || DEFAULT_CONFIG.refreshIntervalMinutes,
+            defaultRotationDeg: Number(document.getElementById('cfgRotation').value)
+        };
+        const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(cfg, null, 2))));
+        const headers = {
+            'Authorization': 'token ' + token,
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github+json'
+        };
+
+        document.getElementById('cfgStatus').textContent = 'Publicando configuración...';
+        try {
+            let sha = null;
+            const getRes = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_CONFIG_FILE}?ref=${GH_BRANCH}`, { headers });
+            if (getRes.ok) sha = (await getRes.json()).sha;
+
+            const body = { message: `Panel: actualizar config.json [${new Date().toLocaleString()}]`, content: b64, branch: GH_BRANCH };
+            if (sha) body.sha = sha;
+
+            const putRes = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_CONFIG_FILE}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+            if (putRes.ok) {
+                document.getElementById('cfgStatus').textContent = '✅ Configuración publicada — las pantallas la toman en su próximo refresco (hasta ' + cfg.refreshIntervalMinutes + ' min).';
+            } else {
+                const err = await putRes.json();
+                document.getElementById('cfgStatus').textContent = '❌ Error: ' + (err.message || putRes.status);
+            }
+        } catch (e) {
+            document.getElementById('cfgStatus').textContent = '❌ Error de red: ' + e.message;
+        }
     }
 
     // ==========================================

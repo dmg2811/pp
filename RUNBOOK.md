@@ -31,6 +31,17 @@
 - El slider detecta que es video por la extensión del archivo (`.mp4`, `.webm`, `.mov`, `.m4v`)
   y lo reproduce completo antes de pasar al siguiente slide.
 
+## Configuración (duración, refresco, rotación)
+- En el panel, sección "⚙️ Configuración de las pantallas": duración de cada imagen, cada
+  cuánto se revisa si hay catálogo nuevo, y la rotación con la que arranca una pantalla que
+  nunca se giró a mano.
+- Se publica como `config.json`. Una pantalla ya encendida lo toma solo en su próximo refresco
+  (no hace falta reiniciarla); no afecta a una pantalla que ya se giró manualmente con el botón
+  "Girar 180°" — ese ajuste manual siempre gana sobre el default.
+- Orden de reproducción: en la tabla del inventario, los botones ▲/▼ mueven cualquier imagen o
+  video a cualquier posición (se publica al instante). La tabla se muestra en el mismo orden en
+  que se ve en la pantalla.
+
 ## La pantalla de una tienda no actualiza / muestra roto
 1. Revisa `https://dmg2811.github.io/pp/data.json` en el navegador — ¿las URLs cargan?
 2. Revisa la pestaña **Actions** del repo `dmg2811/pp` en GitHub — el workflow

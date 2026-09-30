@@ -97,12 +97,36 @@
         // URL del data.json en GitHub Pages del slider
         const DATA_URL = 'https://dmg2811.github.io/pp/data.json';
 
-        // Cada cuánto refrescar los datos desde GitHub (ms)
-        const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutos
+        // URL de config.json (editable desde el panel, sección Configuración).
+        // Si no existe o falla, se usan los valores por defecto de abajo — no
+        // rompe pantallas viejas que nunca publicaron un config.json.
+        const CONFIG_URL = 'https://dmg2811.github.io/pp/config.json';
 
-        // Duración de una imagen en pantalla. Un video usa su propia duración real
+        const DEFAULT_CONFIG = {
+            slideDurationSeconds: 6,   // cuánto dura una IMAGEN en pantalla (el video usa su propia duración)
+            refreshIntervalMinutes: 5, // cada cuánto releer data.json/config.json desde GitHub
+            defaultRotationDeg: 90     // orientación inicial de una pantalla que nunca se giró a mano (90 o 270)
+        };
+        let CONFIG = { ...DEFAULT_CONFIG };
+
+        // Cada cuánto refrescar los datos desde GitHub (ms). Función, no constante,
+        // porque CONFIG puede cambiar después de cargar config.json.
+        function refreshIntervalMs() { return CONFIG.refreshIntervalMinutes * 60 * 1000; }
+
+        // Duración de una imagen en pantalla (ms). Un video usa su propia duración real
         // (evento 'ended'), esto solo aplica a imágenes.
-        const SLIDE_DURATION = 6000;
+        function slideDurationMs() { return CONFIG.slideDurationSeconds * 1000; }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(CONFIG_URL + '?t=' + Date.now());
+                if (!res.ok) return;
+                const remote = await res.json();
+                CONFIG = { ...DEFAULT_CONFIG, ...remote };
+            } catch (e) {
+                // Sin config.json publicado o sin conexión: nos quedamos con los defaults.
+            }
+        }
 
         // ==========================================
         // ESTADO
@@ -113,8 +137,11 @@
         // Se guarda en localStorage: sin esto, cualquier recarga de la página
         // (reinicio de la TV, corte de luz, el navegador refrescando solo)
         // perdía el ajuste manual de "Girar 180°" y la pantalla volvía a
-        // mostrarse de cabeza como al principio.
-        let isRotated = localStorage.getItem('slider_rotated') === 'true';
+        // mostrarse de cabeza como al principio. Si esta pantalla NUNCA se
+        // giró a mano, se usa el default de config.json (se resuelve luego,
+        // tras cargarlo) en vez de asumir 90°.
+        const storedRotation = localStorage.getItem('slider_rotated');
+        let isRotated = storedRotation === null ? null : storedRotation === 'true';
         let advanceTimer = null;   // reemplaza el setInterval fijo: el tiempo varía si es video
         let refreshTimer = null;
         let endedHandler = null;   // referencia al listener 'ended' del video activo, para poder quitarlo
@@ -175,8 +202,16 @@
         applyRotation();
 
         async function initializeSlideshow() {
-            const ok = await loadDataFromGitHub();
+            const [ok] = await Promise.all([loadDataFromGitHub(), loadConfig()]);
             if (!ok) loadDataFromLocalStorage();
+
+            // Si esta pantalla nunca se giró a mano, recién ahora sabemos el
+            // default real (de config.json) — antes de esto se mostró 90°
+            // de forma provisional para no tapar la carga con nada peor.
+            if (isRotated === null) {
+                isRotated = CONFIG.defaultRotationDeg === 270;
+                applyRotation();
+            }
 
             if (images.length > 0) {
                 loadSlideData(currentSlide, imageIndex);
@@ -284,10 +319,10 @@
                 video.addEventListener('ended', endedHandler, { once: true });
                 const durationMs = isFinite(video.duration) && video.duration > 0
                     ? video.duration * 1000
-                    : SLIDE_DURATION;
+                    : slideDurationMs();
                 advanceTimer = setTimeout(nextSlideTransition, durationMs + 4000); // respaldo si 'ended' no dispara
             } else {
-                advanceTimer = setTimeout(nextSlideTransition, SLIDE_DURATION);
+                advanceTimer = setTimeout(nextSlideTransition, slideDurationMs());
             }
         }
 
@@ -308,10 +343,10 @@
 
         function scheduleRefresh() {
             if (refreshTimer) clearTimeout(refreshTimer);
-            const wait = images.length === 0 ? RETRY_INTERVAL : REFRESH_INTERVAL;
+            const wait = images.length === 0 ? RETRY_INTERVAL : refreshIntervalMs();
             refreshTimer = setTimeout(async () => {
                 const prevCount = images.length;
-                const ok = await loadDataFromGitHub();
+                const [ok] = await Promise.all([loadDataFromGitHub(), loadConfig()]);
                 if (ok && images.length !== prevCount) {
                     imageIndex = 0;
                     if (prevCount === 0 && images.length > 0) {

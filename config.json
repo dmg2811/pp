@@ -1,0 +1,5 @@
+{
+  "slideDurationSeconds": 6,
+  "refreshIntervalMinutes": 5,
+  "defaultRotationDeg": 90
+}
