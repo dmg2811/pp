@@ -779,6 +779,7 @@
                     ${isFirst ? '<div class="status-badge" style="background:#fef3c7;color:#92400e;margin-top:4px;">🥇 1º en pantalla</div>' : ''}
                 </td>
                 <td style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button style="background:#0369a1;color:white;font-size:11px;" onclick="editText(${item.id})" title="Editar texto descriptivo">✏️</button>
                     <button style="background:#64748b;color:white;font-size:11px;" onclick="toggleVisibility(${item.id})">${item.visible ? 'Ocultar' : 'Mostrar'}</button>
                     <button class="btn-danger" style="padding:5px 10px;" onclick="deleteItem(${item.id})">🗑️</button>
                 </td>`;
@@ -852,6 +853,15 @@
 
     function toggleVisibility(id) {
         inventory = inventory.map(item => item.id === id ? {...item, visible: !item.visible} : item);
+        saveAndRefresh();
+    }
+
+    function editText(id) {
+        const item = inventory.find(i => i.id === id);
+        if (!item) return;
+        const nuevo = prompt('Texto descriptivo:', item.text || '');
+        if (nuevo === null) return; // canceló
+        inventory = inventory.map(i => i.id === id ? { ...i, text: nuevo.trim() } : i);
         saveAndRefresh();
     }
 
