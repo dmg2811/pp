@@ -239,6 +239,27 @@
         <div id="cfgStatus" style="margin-top:8px; font-size:0.85rem; color:#374151;"></div>
     </div>
 
+    <!-- ====== VISTA PREVIA ====== -->
+    <div class="card" style="margin-bottom:24px; text-align:center;">
+        <h3 class="section-title">👁️ Vista previa</h3>
+        <p style="margin:0 0 12px; font-size:0.8rem; color:#64748b;">
+            Muestra el inventario tal como está <strong>ahora mismo en este navegador</strong>, aunque aún no lo hayas
+            publicado. No es la rotación física de la TV, solo el contenido y el orden.
+        </p>
+        <div id="previewBox" style="width:170px; aspect-ratio:9/16; background:#000; border-radius:10px; overflow:hidden; position:relative; margin:0 auto; box-shadow:0 2px 8px rgba(0,0,0,0.25);">
+            <img id="previewImg" style="width:100%; height:100%; object-fit:contain; display:none;">
+            <video id="previewVideo" style="width:100%; height:100%; object-fit:contain; display:none;" muted playsinline></video>
+            <div id="previewEmpty" style="color:#94a3b8; font-size:11px; padding-top:70%;">Sin contenido visible</div>
+            <div id="previewText" style="position:absolute; bottom:4px; left:0; right:0; text-align:center; color:#fff; font-size:10px; text-shadow:0 0 4px #000; padding:0 4px;"></div>
+            <div id="previewCounter" style="position:absolute; top:4px; right:6px; color:#fff; font-size:9px; text-shadow:0 0 4px #000;"></div>
+        </div>
+        <div style="display:flex; justify-content:center; gap:8px; margin-top:10px;">
+            <button style="background:#e2e8f0; font-size:12px;" onclick="previewStep(-1)">⏮</button>
+            <button id="previewPlayBtn" style="background:#e2e8f0; font-size:12px;" onclick="previewTogglePlay()">⏸</button>
+            <button style="background:#e2e8f0; font-size:12px;" onclick="previewStep(1)">⏭</button>
+        </div>
+    </div>
+
     <!-- ====== DRAG & DROP ====== -->
     <div id="dropZone"
          ondragover="handleDragOver(event)"
@@ -872,6 +893,95 @@
 
         document.getElementById('stats').innerText = `Total: ${filtered.length} | Página ${currentPage} de ${totalPages || 1}`;
         renderPagination(totalPages);
+        refreshPreviewList();
+    }
+
+    // ==========================================
+    // VISTA PREVIA — simulación ligera del slider con el inventario actual
+    // de este navegador (incluye cambios sin publicar). No reproduce la
+    // rotación física de la TV, solo contenido/orden/duración.
+    // ==========================================
+    let previewList = [];
+    let previewListSignature = '';
+    let previewIndex = 0;
+    let previewPlaying = true;
+    let previewTimer = null;
+
+    function isVideoUrl(url) {
+        return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url || '');
+    }
+
+    // Se llama en cada render del inventario. Solo reinicia la vista previa
+    // si el contenido/orden realmente cambió, para no reiniciar un video a
+    // medias por, ej., abrir el panel en otra pestaña.
+    function refreshPreviewList() {
+        previewList = inventory.filter(item => item.visible !== false);
+        const signature = previewList.map(i => i.id).join(',');
+        if (signature === previewListSignature) return;
+        previewListSignature = signature;
+        previewIndex = 0;
+        showPreviewSlide();
+    }
+
+    function showPreviewSlide() {
+        clearTimeout(previewTimer);
+        const img = document.getElementById('previewImg');
+        const video = document.getElementById('previewVideo');
+        const empty = document.getElementById('previewEmpty');
+        const text = document.getElementById('previewText');
+        const counter = document.getElementById('previewCounter');
+        video.pause();
+        img.style.display = 'none';
+        video.style.display = 'none';
+
+        if (previewList.length === 0) {
+            empty.style.display = 'block';
+            text.textContent = '';
+            counter.textContent = '';
+            return;
+        }
+        empty.style.display = 'none';
+
+        const item = previewList[previewIndex];
+        text.textContent = item.text || '';
+        counter.textContent = `${previewIndex + 1}/${previewList.length}`;
+
+        if (isVideoUrl(item.url)) {
+            video.src = item.url;
+            video.style.display = 'block';
+            video.onloadeddata = () => { if (previewPlaying) video.play().catch(() => {}); };
+            video.onended = () => { if (previewPlaying) previewStep(1); };
+            video.onerror = () => previewStep(1); // se saltea si no carga
+        } else {
+            img.src = item.url;
+            img.style.display = 'block';
+            img.onerror = () => previewStep(1);
+            if (previewPlaying) scheduleNextPreviewSlide();
+        }
+    }
+
+    function scheduleNextPreviewSlide() {
+        const seconds = Number(document.getElementById('cfgSlideDuration')?.value) || 6;
+        previewTimer = setTimeout(() => previewStep(1), seconds * 1000);
+    }
+
+    function previewStep(direction) {
+        if (previewList.length === 0) return;
+        previewIndex = (previewIndex + direction + previewList.length) % previewList.length;
+        showPreviewSlide();
+    }
+
+    function previewTogglePlay() {
+        previewPlaying = !previewPlaying;
+        document.getElementById('previewPlayBtn').textContent = previewPlaying ? '⏸' : '▶';
+        const video = document.getElementById('previewVideo');
+        if (previewPlaying) {
+            if (video.style.display === 'block') video.play().catch(() => {});
+            else scheduleNextPreviewSlide();
+        } else {
+            clearTimeout(previewTimer);
+            video.pause();
+        }
     }
 
     function renderPagination(total) {
