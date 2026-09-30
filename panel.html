@@ -264,11 +264,15 @@
             <button onclick="clearAll()" class="btn-danger">Limpiar Todo</button>
         </div>
     </div>
+    <p style="margin:0 0 10px; font-size:0.8rem; color:#64748b;">
+        La tabla está en el <strong>orden real en que se reproducen</strong> en la pantalla (de arriba hacia abajo).
+        Usa ▲/▼ para moverlas; se publica solo al mover.
+    </p>
 
     <table>
         <thead>
             <tr>
-                <th>Vista</th><th>Ruta</th><th>Texto</th><th>Estado</th><th>Acciones</th>
+                <th>#</th><th>Vista</th><th>Ruta</th><th>Texto</th><th>Estado</th><th>Acciones</th>
             </tr>
         </thead>
         <tbody id="inventoryBody"></tbody>
@@ -734,25 +738,39 @@
         return div.innerHTML;
     }
 
+    // Devuelve el inventario filtrado por búsqueda, en el orden real de
+    // reproducción (igual que queda en data.json / el slider).
+    function getFiltered() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        return inventory.filter(item => item.url.toLowerCase().includes(search) || item.text.toLowerCase().includes(search));
+    }
+
     function renderInventory() {
         const tbody = document.getElementById('inventoryBody');
-        const search = document.getElementById('searchInput').value.toLowerCase();
         tbody.innerHTML = '';
 
-        let filtered = inventory
-            .filter(item => item.url.toLowerCase().includes(search) || item.text.toLowerCase().includes(search));
-        filtered = [...filtered].reverse();
+        const filtered = getFiltered();
 
         const totalPages = Math.ceil(filtered.length / recordsPerPage);
         if (currentPage > totalPages) currentPage = totalPages || 1;
 
         const start = (currentPage - 1) * recordsPerPage;
-        const firstId = inventory[0] && inventory[0].id;
-        filtered.slice(start, start + recordsPerPage).forEach(item => {
+        filtered.slice(start, start + recordsPerPage).forEach((item) => {
+            // Posición real en TODO el inventario (no en la lista filtrada), para que
+            // ▲/▼ y "1º en pantalla" sigan siendo correctos aunque haya una búsqueda activa.
+            const globalIdx = inventory.findIndex(i => i.id === item.id);
+            const isFirst = globalIdx === 0;
+            const isLast = globalIdx === inventory.length - 1;
             const row = document.createElement('tr');
             const safeUrl = escapeHtml(item.url);
-            const isFirst = item.id === firstId;
             row.innerHTML = `
+                <td>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                        <button style="background:#e2e8f0;color:#334155;font-size:11px;padding:2px 8px;" ${isFirst ? 'disabled' : ''} onclick="moveItem(${item.id}, -1)" title="Subir">▲</button>
+                        <span style="font-size:11px;color:#94a3b8;">${globalIdx + 1}</span>
+                        <button style="background:#e2e8f0;color:#334155;font-size:11px;padding:2px 8px;" ${isLast ? 'disabled' : ''} onclick="moveItem(${item.id}, 1)" title="Bajar">▼</button>
+                    </div>
+                </td>
                 <td><img src="${safeUrl}" class="img-preview" onerror="this.src='https://via.placeholder.com/60x40?text=❌'"></td>
                 <td><small>${safeUrl}</small></td>
                 <td>${escapeHtml(item.text) || '---'}</td>
@@ -761,7 +779,6 @@
                     ${isFirst ? '<div class="status-badge" style="background:#fef3c7;color:#92400e;margin-top:4px;">🥇 1º en pantalla</div>' : ''}
                 </td>
                 <td style="display:flex; gap:5px; flex-wrap:wrap;">
-                    ${isFirst ? '' : `<button style="background:#0369a1;color:white;font-size:11px;" onclick="moveToFront(${item.id})" title="Que sea lo primero que se vea en la pantalla">⬆️ Primero</button>`}
                     <button style="background:#64748b;color:white;font-size:11px;" onclick="toggleVisibility(${item.id})">${item.visible ? 'Ocultar' : 'Mostrar'}</button>
                     <button class="btn-danger" style="padding:5px 10px;" onclick="deleteItem(${item.id})">🗑️</button>
                 </td>`;
@@ -813,18 +830,22 @@
         saveAndRefresh();
     }
 
-    // Pone el item primero en el orden de reproducción de la pantalla.
-    // (data.json se publica en el mismo orden en que queda `inventory`, y el
-    // slider siempre arranca desde el índice 0.) Se publica de inmediato,
-    // sin esperar al botón "Publicar" ni al auto-publish: el sentido de este
-    // botón es "que se vea YA", y dejarlo a medias fue justo lo que causó
-    // confusión la última vez (se movía localmente pero no se publicaba).
-    async function moveToFront(id) {
+    // Mueve el item una posición arriba (-1) o abajo (+1) en el orden real de
+    // reproducción (data.json se publica en el mismo orden en que queda
+    // `inventory`, y el slider siempre arranca desde el índice 0). Se publica
+    // de inmediato, sin esperar al botón "Publicar" ni al auto-publish: el
+    // sentido de estos botones es "que se vea YA", y dejarlo a medias fue
+    // justo lo que causó confusión antes (se movía local pero no se publicaba).
+    async function moveItem(id, direction) {
         const idx = inventory.findIndex(item => item.id === id);
-        if (idx <= 0) return;
-        const [item] = inventory.splice(idx, 1);
-        inventory.unshift(item);
+        const newIdx = idx + direction;
+        if (idx === -1 || newIdx < 0 || newIdx >= inventory.length) return;
+        [inventory[idx], inventory[newIdx]] = [inventory[newIdx], inventory[idx]];
         localStorage.setItem('slideshow_db', JSON.stringify(inventory));
+        // Nos quedamos viendo la página donde cayó el item movido.
+        const filtered = getFiltered();
+        const posInFiltered = filtered.findIndex(item => item.id === id);
+        if (posInFiltered !== -1) currentPage = Math.floor(posInFiltered / recordsPerPage) + 1;
         renderInventory();
         await publishToGitHub();
     }
