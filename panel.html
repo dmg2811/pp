@@ -524,25 +524,6 @@
         return /^video\/mp4$/.test(file.type) && file.size <= 20 * 1024 * 1024;
     }
 
-    // Las imágenes del slider son horizontales (la página se rota 90° para llenar
-    // la pantalla vertical de la TV). Un video vertical (grabado normal en celular)
-    // sufre esa misma rotación y termina de lado — necesita rotarse 90° ANTES de
-    // subir (ver RUNBOOK.md). Esto NO se puede corregir solo con CSS/JS en el
-    // navegador: hay que re-codificar el archivo.
-    function getVideoDimensions(file) {
-        return new Promise((resolve) => {
-            const v = document.createElement('video');
-            const url = URL.createObjectURL(file);
-            v.preload = 'metadata';
-            v.onloadedmetadata = () => {
-                URL.revokeObjectURL(url);
-                resolve({ width: v.videoWidth, height: v.videoHeight });
-            };
-            v.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-            v.src = url;
-        });
-    }
-
     // ---- Subir archivos a GitHub y agregar al inventario ----
     async function uploadFilesToGitHub(fileEntries) {
         const token = localStorage.getItem('gh_token');
@@ -569,7 +550,6 @@
         const skipped = [];
         const compressed = [];
         const formatWarnings = [];
-        const portraitWarnings = [];
         const addedItems = [];
 
         for (const entry of fileEntries) {
@@ -583,8 +563,6 @@
                 // No se convierte automáticamente (ver nota en videoAlreadySafe) — se sube
                 // tal cual, avisando si no es MP4/H.264 liviano por si no reproduce bien.
                 if (!videoAlreadySafe(entry.file)) formatWarnings.push(entry.file.name);
-                const dims = await getVideoDimensions(entry.file);
-                if (dims && dims.height > dims.width) portraitWarnings.push(entry.file.name);
             } else {
                 try {
                     uploadFile = await compressImageIfNeeded(entry.file);
@@ -665,7 +643,6 @@
         if (errors > 0) msg += `, ❌ ${errors} errores`;
         if (skipped.length > 0) msg += `, ⚠️ ${skipped.length} omitidas por pesar más de 20MB (${skipped.join(', ')}) — súbelas por git`;
         if (formatWarnings.length > 0) msg += `, 🎬 revisa que reproduzcan bien (no son MP4/H.264): ${formatWarnings.join(', ')}`;
-        if (portraitWarnings.length > 0) msg += `, 🔄 video VERTICAL sin rotar — se va a ver de lado en la pantalla (${portraitWarnings.join(', ')}): pídeselo a Claude o usa HandBrake, ver RUNBOOK.md`;
         setDropProgress(msg);
         setTimeout(() => setDropProgress(''), 12000);
 

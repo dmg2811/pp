@@ -32,6 +32,13 @@
         .slide.active { opacity: 1; transform: scale(1.04); }
 
         /* La imagen o el video quedan dentro del .slide, no son el .slide */
+        /* Video en modo canvas: el <video> solo decodifica, lo que se ve es el canvas */
+        .slide video.video-src {
+            position: absolute; top: 0; left: 0;
+            width: 2px; height: 2px; opacity: 0; pointer-events: none;
+        }
+        .slide canvas { width: 100%; height: 100%; display: block; }
+
         .slide img, .slide video {
             width: 100%; height: 100%;
             object-fit: contain; object-position: center;
@@ -250,7 +257,56 @@
                 media.alt = item.text || '';
             }
             slideElement.appendChild(media);
+
+            if (media.tagName === 'VIDEO' && USE_CANVAS_VIDEO) attachVideoCanvas(media, slideElement);
             return media;
+        }
+
+        // En las Smart TV de las tiendas el <video> se pinta por una capa de hardware
+        // aparte que NO obedece la rotación CSS de la página (por eso se veía como
+        // una franja horizontal, o de cabeza al "hornear" la rotación en el archivo).
+        // Las imágenes sí la obedecen. Para que el video se comporte exactamente igual
+        // que una imagen, el <video> queda oculto (solo decodifica) y cada fotograma
+        // se dibuja en un <canvas>, que es un elemento normal y sí rota con la página.
+        // Se puede forzar el modo anterior agregando ?video=native a la URL.
+        const USE_CANVAS_VIDEO = !/[?&]video=native/.test(location.search);
+        const CANVAS_MAX_SIDE = 1600; // tope de resolución interna para no ahogar TVs lentas
+
+        function attachVideoCanvas(video, slideElement) {
+            video.classList.add('video-src');
+            const canvas = document.createElement('canvas');
+            slideElement.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+
+            function sizeCanvas() {
+                const w = slideElement.clientWidth || 1;
+                const h = slideElement.clientHeight || 1;
+                const k = Math.min(1, CANVAS_MAX_SIDE / Math.max(w, h));
+                canvas.width = Math.round(w * k);
+                canvas.height = Math.round(h * k);
+            }
+            sizeCanvas();
+
+            function draw() {
+                if (!video.isConnected) return; // el slide ya se reemplazó: parar
+                if (!video.paused && video.videoWidth && video.videoHeight) {
+                    const vw = video.videoWidth, vh = video.videoHeight;
+                    const s = Math.min(canvas.width / vw, canvas.height / vh); // "contain"
+                    const dw = vw * s, dh = vh * s;
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(video, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+                }
+                schedule();
+            }
+            function schedule() {
+                if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(draw);
+                else requestAnimationFrame(draw);
+            }
+            // Si el video está en pausa al arrancar no hay fotograma que pedir: arrancamos
+            // con rAF y el propio draw() decide si dibuja.
+            requestAnimationFrame(draw);
+            window.addEventListener('resize', sizeCanvas);
         }
 
         // Si un archivo falla al cargar (borrado, 404, ruta mal escrita), no se

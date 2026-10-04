@@ -24,26 +24,22 @@
   hacerlo automático en el navegador con ffmpeg.wasm y no es viable: requiere headers
   especiales (COOP/COEP) que GitHub Pages no permite configurar.
 
-### ⚠️ Video vertical (celular) — necesita rotación de 90° ANTES de subir
-Las imágenes del slider están diseñadas en horizontal (por eso `index.html` rota la página
-90° para llenar la pantalla vertical de la TV). Un video grabado normal en el celular ya viene
-vertical — si se sube tal cual, la rotación de la página lo deja de lado (una franja horizontal
-chiquita a la mitad de la pantalla, con barras negras arriba y abajo). Esto le pasó a
-`videoglowbalance`, `bypass-sensorial`, `ultra-advance-concepto` y `ultra-advance-gold`, los 4
-videos que había al momento de escribir esto — se corrigió rotándolos con:
-```
-ffmpeg -i entrada.mp4 -vf "transpose=2" -an -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 23 -preset medium -movflags +faststart salida.mp4
-```
-(`transpose=2` = 90° antihorario; es la dirección que da el resultado correcto, verificado
-visualmente — `transpose=1` queda al revés/de cabeza). El resultado queda con ancho y alto
-invertidos (ej. 1080x1920 → 1920x1080) a propósito.
-- **Si el video ya viene horizontal** (grabado apaisado, o ya es un diseño gráfico en
-  horizontal como las imágenes) **no** se le aplica esto — solo a video vertical/retrato.
-- Dos formas de hacerlo:
-  1. **Pídeselo a Claude** — dale la ruta del archivo, aplica esta rotación (si hace falta) y
-     comprime en un solo paso, y te dice cuándo ya está subido.
-  2. **HandBrake** (gratis, handbrake.fr): abre el video, preset "Fast 1080p30", en la pestaña
-     "Rotation" gira 90° (prueba un sentido; si queda de cabeza, usa el otro), exportar.
+### Orientación del video (¡no hay que rotarlo!)
+Las TV de las tiendas son pantallas horizontales montadas giradas, y `index.html` rota toda la
+página por software para compensarlo. Las imágenes obedecen esa rotación, pero el `<video>`
+de esas TV parece pintarse por una capa de hardware aparte que la **ignora** (lo deducido de fotos de las tiendas): sin tratamiento se ve como
+franja horizontal chica, y si se "hornea" la rotación en el archivo se arregla en una TV pero
+queda mal en otra montada al revés (y mal en la laptop). Por eso **no se rota el archivo**: el
+video se sube tal cual lo grabaron (vertical, como sale del celular) y `index.html` dibuja cada
+fotograma en un `<canvas>`, que sí rota con la página igual que una imagen — así el video
+queda igual de orientado que las imágenes en cualquier pantalla, incluso si le das "Girar 180°".
+- Si una TV muy lenta se ve entrecortada, se puede probar el modo anterior agregando
+  `?video=native` a la URL del slider en esa TV (solo se pierde la rotación correcta del video).
+- Lo único que sí conviene hacer antes de subir es comprimir (H.264, sin audio, ~1080p). Dos formas:
+  1. **Pídeselo a Claude** — dale la ruta del archivo y te lo deja listo y subido.
+  2. **HandBrake** (gratis, handbrake.fr): preset "Fast 1080p30", **sin** rotarlo, exportar.
+- Si cambias un video **por otro archivo con el mismo nombre**, las TV pueden seguir mostrando la
+  copia vieja en caché: súbelo con nombre nuevo (ej. `-v2`).
 - El slider detecta que es video por la extensión del archivo (`.mp4`, `.webm`, `.mov`, `.m4v`)
   y lo reproduce completo antes de pasar al siguiente slide.
 
