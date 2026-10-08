@@ -374,13 +374,8 @@
         loadConfigIntoForm();
     });
 
-    // Trae el data.json publicado y lo usa como fuente de verdad para todo lo
-    // que ya esté publicado: contenido Y orden (p. ej. si alguien reordenó
-    // manualmente el video al inicio, eso no se debe perder). Los items que
-    // solo existen en local (aún no publicados) se conservan al final.
-    // Ids que se borraron en este navegador y aún no se publicó esa baja. Sin esto,
-    // syncWithRemote() volvía a agregar desde lo publicado un item recién borrado
-    // (su archivo ya no existía, y la TV se quedaba con un video/imagen rota).
+    // ---- Estado local que todavía no se ha publicado ----
+    // Ids borrados aquí (sin esto, un item recién borrado "resucitaba" desde lo publicado).
     function getDeletedIds() {
         try { return new Set(JSON.parse(localStorage.getItem('slideshow_deleted')) || []); } catch (e) { return new Set(); }
     }
@@ -389,26 +384,75 @@
         ids.forEach(id => s.add(id));
         localStorage.setItem('slideshow_deleted', JSON.stringify([...s]));
     }
+    // Cambios hechos aquí (ocultar/mostrar, editar texto) que aún no se publican: si hay
+    // que reconciliar con lo publicado, estos ganan sobre lo que diga GitHub.
+    function getPending() {
+        try { return JSON.parse(localStorage.getItem('slideshow_pending')) || {}; } catch (e) { return {}; }
+    }
+    function setPending(id, fields) {
+        const p = getPending();
+        p[id] = { ...(p[id] || {}), ...fields };
+        localStorage.setItem('slideshow_pending', JSON.stringify(p));
+    }
+    // Copia exacta (como texto) de lo publicado la última vez que este navegador se
+    // sincronizó o publicó. Si al publicar GitHub ya NO coincide con esto, alguien más
+    // (otra pestaña/navegador) publicó mientras tanto.
+    const BASE_KEY = 'slideshow_base';
 
+    // Lee lo publicado. Con token usa la API (siempre al día); sin token o si falla, la
+    // página pública (puede ir unos minutos atrasada por la caché de GitHub Pages).
+    async function fetchPublished() {
+        const token = localStorage.getItem('gh_token');
+        if (token) {
+            try {
+                const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`, {
+                    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json' },
+                    cache: 'no-store'
+                });
+                if (r.ok) {
+                    const j = await r.json();
+                    const txt = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))));
+                    return JSON.parse(txt);
+                }
+            } catch (e) { /* cae a la página pública */ }
+        }
+        try {
+            const r = await fetch(GH_PAGES_BASE + 'data.json?t=' + Date.now());
+            if (r.ok) return await r.json();
+        } catch (e) { /* sin conexión */ }
+        return null;
+    }
+
+    // Mezcla lo publicado con el inventario local: lo publicado manda en contenido y orden
+    // (así una pestaña vieja no pisa correcciones), PERO se respetan los borrados y los
+    // cambios pendientes de este navegador, y lo que solo existe aquí se conserva al final.
+    function reconcile(publishedList) {
+        const deleted = getDeletedIds();
+        const pending = getPending();
+        const remote = publishedList
+            .filter(item => !deleted.has(item.id))
+            .map(item => pending[item.id] ? { ...item, ...pending[item.id] } : item);
+        const localById = new Map(inventory.map(item => [item.id, item]));
+        const remoteIds = new Set(remote.map(item => item.id));
+        let added = 0, updated = 0, reordered = false;
+        remote.forEach((item, i) => {
+            const local = localById.get(item.id);
+            if (!local) added++;
+            else if (JSON.stringify(local) !== JSON.stringify(item)) updated++;
+            if (inventory[i]?.id !== item.id) reordered = true;
+        });
+        const localOnly = inventory.filter(item => !remoteIds.has(item.id) && !deleted.has(item.id));
+        inventory = remote.concat(localOnly);
+        return { added, updated, reordered };
+    }
+
+    // Al abrir el panel: se pone al día con lo publicado.
     async function syncWithRemote() {
         try {
-            const res = await fetch(GH_PAGES_BASE + 'data.json?t=' + Date.now());
-            if (!res.ok) return;
-            const deleted = getDeletedIds();
-            const remote = (await res.json()).filter(item => !deleted.has(item.id));
-            const localById = new Map(inventory.map(item => [item.id, item]));
-            const remoteIds = new Set(remote.map(item => item.id));
-            let added = 0, updated = 0, reordered = false;
-
-            remote.forEach((item, i) => {
-                const local = localById.get(item.id);
-                if (!local) added++;
-                else if (JSON.stringify(local) !== JSON.stringify(item)) updated++;
-                if (inventory[i]?.id !== item.id) reordered = true;
-            });
-            const unpublished = inventory.filter(item => !remoteIds.has(item.id));
-            inventory = remote.concat(unpublished);
-
+            const published = await fetchPublished();
+            if (!published) return;
+            const { added, updated, reordered } = reconcile(published);
+            localStorage.setItem(BASE_KEY, JSON.stringify(published));
             if (added > 0 || updated > 0 || reordered) {
                 localStorage.setItem('slideshow_db', JSON.stringify(inventory));
                 const parts = [];
@@ -724,17 +768,22 @@
 
         setStatus('loading', 'Publicando...');
 
-        // Antes de publicar, siempre nos ponemos al día con lo que ya está en
-        // GitHub: si esta pestaña llevaba rato abierta y alguien (u otro
-        // navegador) ya corrigió/publicó algo mientras tanto, no lo pisamos
-        // con datos viejos. Lo nuevo/sin publicar de este navegador se
-        // conserva igual (syncWithRemote solo reemplaza lo que ya coincide
-        // por id, y agrega al final lo que sea nuevo aquí).
-        await syncWithRemote();
-        renderInventory();
+        // Si alguien más publicó desde que este navegador se sincronizó (otra pestaña
+        // abierta desde hace rato, otro navegador), nos ponemos al día ANTES de publicar
+        // para no pisar su trabajo con datos viejos. Si nadie más publicó, se publica el
+        // inventario local tal cual — así ocultar/mostrar/borrar/mover surten efecto.
+        const published = await fetchPublished();
+        if (published && JSON.stringify(published) !== localStorage.getItem(BASE_KEY)) {
+            reconcile(published);
+            localStorage.setItem('slideshow_db', JSON.stringify(inventory));
+            renderInventory();
+        }
 
+        // Se publica TODO el inventario (incluidos los ocultos, con visible:false) para que
+        // el estado y la posición de cada item sean los mismos en cualquier navegador; el
+        // slider ya ignora los que traen visible:false.
         const visibleItems = inventory.filter(item => item.visible !== false);
-        const jsonStr = JSON.stringify(visibleItems, null, 2);
+        const jsonStr = JSON.stringify(inventory, null, 2);
         const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
 
         const headers = {
@@ -781,6 +830,8 @@
                 const ts = new Date().toLocaleString();
                 localStorage.setItem('last_publish', ts);
                 localStorage.removeItem('slideshow_deleted');
+                localStorage.removeItem('slideshow_pending');
+                localStorage.setItem(BASE_KEY, JSON.stringify(inventory));
                 setStatus('ok', `✅ Publicado: ${ts} — ${visibleItems.length} imágenes activas`);
             } else {
                 const err = await putRes.json();
@@ -1086,7 +1137,11 @@
     }
 
     function toggleVisibility(id) {
-        inventory = inventory.map(item => item.id === id ? {...item, visible: !item.visible} : item);
+        const target = inventory.find(item => item.id === id);
+        if (!target) return;
+        const visible = !target.visible;
+        inventory = inventory.map(item => item.id === id ? {...item, visible} : item);
+        setPending(id, { visible });
         saveAndRefresh();
     }
 
@@ -1096,6 +1151,7 @@
         const nuevo = prompt('Texto descriptivo:', item.text || '');
         if (nuevo === null) return; // canceló
         inventory = inventory.map(i => i.id === id ? { ...i, text: nuevo.trim() } : i);
+        setPending(id, { text: nuevo.trim() });
         saveAndRefresh();
     }
 
