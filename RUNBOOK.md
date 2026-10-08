@@ -35,7 +35,12 @@ fotograma en un `<canvas>`, que sí rota con la página igual que una imagen —
 queda igual de orientado que las imágenes en cualquier pantalla, incluso si le das "Girar 180°".
 - Si una TV muy lenta se ve entrecortada, se puede probar el modo anterior agregando
   `?video=native` a la URL del slider en esa TV (solo se pierde la rotación correcta del video).
-- Lo único que sí conviene hacer antes de subir es comprimir (H.264, sin audio, ~1080p). Dos formas:
+- **Peso para TV baratas** (lo que las dejó lentas y sin video en octubre): las imágenes de
+  4500x8000 y hasta 13 MB, y un video de 1440x2560 nivel 5.0, ahogaban a las Smart TV. Referencia
+  que sí corre bien: imágenes de **1080x1920 (~300 KB)** (el panel ya las reduce solo) y videos
+  de **720x1280, H.264 perfil Main nivel 3.1, 24 fps, sin audio, ~2-3 MB**:
+  `ffmpeg -i entrada.mp4 -vf "scale=720:1280:force_original_aspect_ratio=decrease,fps=24" -an -c:v libx264 -profile:v main -level 3.1 -pix_fmt yuv420p -crf 25 -maxrate 2500k -bufsize 5000k -movflags +faststart salida.mp4`
+- Comprimir antes de subir. Dos formas:
   1. **Pídeselo a Claude** — dale la ruta del archivo y te lo deja listo y subido.
   2. **HandBrake** (gratis, handbrake.fr): preset "Fast 1080p30", **sin** rotarlo, exportar.
 - Si cambias un video **por otro archivo con el mismo nombre**, las TV pueden seguir mostrando la
